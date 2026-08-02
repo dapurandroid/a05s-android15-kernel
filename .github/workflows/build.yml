@@ -106,49 +106,33 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 1. Pastikan struktur folder NDK terpenuhi agar tidak divalidasi gagal
+          # 1. Pastikan struktur folder NDK terpenuhi
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p ../prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p ../external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           
           ln -sf /usr/bin/clang-17 prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/clang || true
           
-          # 2. Patch build/build.sh agar perintah dasar coreutils (sed, nproc, readlink, tr) selalu terbaca aman
+          # 2. Patch build/build.sh agar coreutils aman
           if [ -f "build/build.sh" ]; then
             sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' build/build.sh
           fi
 
-          # 3. Deklarasikan variabel environment Google GKI secara mandiri dan akurat
-          export ANDROID_BUILD_TOP=$GITHUB_WORKSPACE
+          # 3. KUNCI UTAMA: Definisikan ROOT_DIR secara mutlak agar gettop.sh terbaca benar
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
+          export ANDROID_BUILD_TOP=$GITHUB_WORKSPACE
+          export BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec
           
           export CHIPSET_NAME=sm6225
           export TARGET_PRODUCT=gki
-          export TARGET_BOARD_PLATFORM=gki
           
           export OUT_DIR=${ANDROID_BUILD_TOP}/out/msm-kernel-${CHIPSET_NAME}-${TARGET_PRODUCT}
           export ANDROID_PRODUCT_OUT=${ANDROID_BUILD_TOP}/out/target/product/a05s
           
-          # Path ekstensi modul luar (Qcom drivers)
-          export EXT_MODULES="../vendor/qcom/opensource/mm-drivers/msm_ext_display \
-            ../vendor/qcom/opensource/mm-drivers/sync_fence \
-            ../vendor/qcom/opensource/mm-drivers/hw_fence \
-            ../vendor/qcom/opensource/mmrm-driver \
-            ../vendor/qcom/opensource/securemsm-kernel \
-            ../vendor/qcom/opensource/display-drivers/msm \
-            ../vendor/qcom/opensource/audio-kernel \
-            ../vendor/qcom/opensource/camera-kernel"
-          
           export PATH="$GITHUB_WORKSPACE/bin:$GITHUB_WORKSPACE/kernel_platform/prebuilts/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           
-          # 4. Eksekusi langsung build.sh milik Google menggunakan konfigurasi kernel m269 (A05s)
-          # Menggunakan file config target yang terbaca di log sebelumnya
-          ./build/build.sh \
-            ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform \
-            KERNEL_DIR=msm-kernel \
-            BRANCH=android15-6.1 \
-            BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec \
-            FILES="arch/arm64/boot/Image arch/arm64/boot/Image.gz"
+          # 4. Jalankan build.sh dengan menyertakan argumen ROOT_DIR secara eksplisit
+          BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec ./build/build.sh
           
       - name: Package Output
         run: |
