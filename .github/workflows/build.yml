@@ -117,7 +117,7 @@ jobs:
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (Sysroot Nuke Fix)
+      - name: Compile Kernel via Google Build System (Physical Header Nuke)
         run: |
           sudo apt-get install dos2unix -y
           find . -type f -name "*.sh" -exec dos2unix {} +
@@ -143,14 +143,16 @@ jobs:
           sudo ln -sf /usr/bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
           
-          # --- 3. [BARU] SYSROOT NUKE: Memaksa Clang membaca header Ubuntu ---
-          echo "Menghapus isolasi sysroot dan memaksa include path Ubuntu..."
-          # Menghapus argumen --sysroot dari build.sh agar tidak mengunci Clang
-          sed -i 's/--sysroot=[^ "]*//g' build/build.sh 2>/dev/null || true
+          # --- 3. [SOLUSI NUKLIR] PHYSICAL HEADER CLONE ---
+          echo "Menyalin paksa header Ubuntu ke dalam sysroot sandbox GKI..."
+          # Membuat struktur folder sysroot yang diminta Clang
+          mkdir -p build/build-tools/sysroot/usr/include
           
-          # Memaksa kernel Makefile untuk menyertakan folder include bawaan Ubuntu
-          sed -i 's/HOSTCFLAGS   =/HOSTCFLAGS   = -I\/usr\/include -I\/usr\/include\/x86_64-linux-gnu /g' common/Makefile 2>/dev/null || true
-          sed -i 's/HOSTCFLAGS   =/HOSTCFLAGS   = -I\/usr\/include -I\/usr\/include\/x86_64-linux-gnu /g' msm-kernel/Makefile 2>/dev/null || true
+          # Menyalin seluruh folder include standar C/C++ dari OS host ke dalam sandbox
+          sudo cp -r /usr/include/* build/build-tools/sysroot/usr/include/ 2>/dev/null || true
+          
+          # Menyalin header spesifik arsitektur x86_64 yang berisi sys/types.h
+          sudo cp -r /usr/include/x86_64-linux-gnu/* build/build-tools/sysroot/usr/include/ 2>/dev/null || true
           
           # --- 4. TRIK NDK Dummy ---
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
