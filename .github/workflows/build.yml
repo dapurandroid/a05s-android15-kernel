@@ -96,14 +96,19 @@ jobs:
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (The Final Assembly)
+      - name: Compile Kernel via Google Build System (The Ultimate Trap)
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 1. KEMBALIKAN JURUS PATH ANDA (Mencegah nproc, sed, readlink hilang)
-          echo "Menginjeksi pelindung PATH Ubuntu..."
-          sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' build/build.sh
-          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+          # 1. THE HERMETIC TRAP (Bypass PATH Nuking)
+          # Alih-alih mengedit PATH, kita jejalkan utilitas OS langsung ke dalam folder sandbox.
+          echo "Menyuntikkan host binaries Ubuntu ke dalam sandbox GKI..."
+          mkdir -p prebuilts/build-tools/path/linux-x86
+          mkdir -p build/build-tools/path/linux-x86
+          sudo ln -sf /usr/bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
+          sudo ln -sf /bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
+          sudo ln -sf /usr/bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
+          sudo ln -sf /bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
           
           # 2. TRIK NDK DUMMY (Mencegah error NDK_TRIPLE)
           echo "Membuat struktur NDK Dummy..."
@@ -151,7 +156,7 @@ jobs:
           echo "Memulai kompilasi kernel dengan AOSP Clang..."
           chmod +x build/build.sh
           ./build/build.sh
-
+          
       - name: Package Output
         run: |
           cd $GITHUB_WORKSPACE
