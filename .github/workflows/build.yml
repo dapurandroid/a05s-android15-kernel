@@ -116,7 +116,11 @@ jobs:
           
           mkdir -p out/target/product/a05s
           
-          # 2. Patch build.sh di dalam kernel_platform/build/
+          # 2. SOLUSI UTAMA: Buat symlink folder build di root agar skrip Samsung menemukan build/build.sh dengan benar
+          rm -rf build
+          ln -sf kernel_platform/build build
+          
+          # Patch build.sh agar PATH coreutils aman
           if [ -f "kernel_platform/build/build.sh" ]; then
             sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' kernel_platform/build/build.sh
           fi
@@ -157,9 +161,6 @@ jobs:
           chmod +x build_kernel_GKI.sh
           chmod +x kernel_platform/build/android/prepare_vendor.sh 2>/dev/null || true
           
-          # 3. KUNCI UTAMA: Jalankan skrip dari dalam folder kernel_platform agar path build.sh terbaca benar, 
-          # atau biarkan skrip Samsung mengeksekusi kernel_platform/build/build.sh dengan benar.
-          # Mari kita arahkan direktori eksekusi skrip utama Samsung:
           echo "y" | ./build_kernel_GKI.sh a05s_eur_open user sm6225
 
       - name: Package Output
