@@ -19,17 +19,30 @@ jobs:
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
-      - name: Install Build Dependencies (Super Kilat)
+      - name: Install Build Dependencies (Super Kilat + BPF Fix)
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libsqlite3-dev libgmp-dev libmpfr-dev libmpc-dev libglib2.0-dev libpixman-1-dev python3 liblz4-tool git ccache zip dos2unix clang-17 lld-17 llvm-17
+          # [TAMBAHAN BARU] Memasukkan 'libelf-dev' ke daftar instalasi untuk menyembuhkan error libelf.h
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libsqlite3-dev libgmp-dev libmpfr-dev libmpc-dev libglib2.0-dev libpixman-1-dev python3 liblz4-tool git ccache zip dos2unix clang-17 lld-17 llvm-17 libelf-dev
           find . -type f -name "*.sh" -exec dos2unix {} +
           
-          # Memaku Clang ke sistem dasar
+          # Memaku Clang dan LLD ke sistem dasar
           sudo ln -sf /usr/bin/clang-17 /usr/bin/clang
           sudo ln -sf /usr/bin/clang-17 /bin/clang
           sudo ln -sf /usr/bin/ld.lld-17 /usr/bin/ld.lld
           sudo ln -sf /usr/bin/ld.lld-17 /bin/ld.lld
+          
+          # [TAMBAHAN BARU] Memaku LLVM tools agar tidak "not found" saat perakitan BPF
+          sudo ln -sf /usr/bin/llvm-ar-17 /usr/bin/llvm-ar
+          sudo ln -sf /usr/bin/llvm-ar-17 /bin/llvm-ar
+          sudo ln -sf /usr/bin/llvm-nm-17 /usr/bin/llvm-nm
+          sudo ln -sf /usr/bin/llvm-nm-17 /bin/llvm-nm
+          sudo ln -sf /usr/bin/llvm-strip-17 /usr/bin/llvm-strip
+          sudo ln -sf /usr/bin/llvm-strip-17 /bin/llvm-strip
+          sudo ln -sf /usr/bin/llvm-objcopy-17 /usr/bin/llvm-objcopy
+          sudo ln -sf /usr/bin/llvm-objcopy-17 /bin/llvm-objcopy
+          sudo ln -sf /usr/bin/llvm-objdump-17 /usr/bin/llvm-objdump
+          sudo ln -sf /usr/bin/llvm-objdump-17 /bin/llvm-objdump
 
       - name: Inject KernelSU Next & SuSFS
         run: |
