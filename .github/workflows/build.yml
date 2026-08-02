@@ -110,29 +110,29 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # 3 & 4. THE TRUE HERMETIC TRAP & SYSROOT MERGE (Presisi Mesin Tempur)
+          # 3 & 4. THE TRUE HERMETIC TRAP & SYSROOT MERGE (Struktur Presisi)
           echo "Membersihkan rintangan dan merakit sysroot fisik..."
           TRUE_SANDBOX="build/kernel/build-tools"
           
-          # HANCURKAN file/symlink lama yang memblokir pembuatan folder
+          # HANCURKAN file/symlink lama
           sudo rm -rf $TRUE_SANDBOX/sysroot 2>/dev/null || true
           
-          # Sekarang aman untuk membuat strukturnya
+          # Buat lorong direktori OS Linux yang 100% identik dengan Ubuntu
           mkdir -p $TRUE_SANDBOX/path/linux-x86
           mkdir -p $TRUE_SANDBOX/sysroot/usr/include
-          mkdir -p $TRUE_SANDBOX/sysroot/usr/lib
+          mkdir -p $TRUE_SANDBOX/sysroot/usr/lib/x86_64-linux-gnu
+          mkdir -p $TRUE_SANDBOX/sysroot/lib/x86_64-linux-gnu
+          mkdir -p $TRUE_SANDBOX/sysroot/lib64
           
           # Injeksi Utilitas (Mencegah nproc, tr, sed hilang)
           sudo ln -sf /usr/bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           
-          # Injeksi Sysroot Fisik (Mencegah sys/types.h hilang)
+          # Injeksi Sysroot Fisik Terstruktur (Mencegah libc.so patah arah)
           sudo cp -rL /usr/include/* $TRUE_SANDBOX/sysroot/usr/include/ 2>/dev/null || true
-          sudo cp -rL /usr/include/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/include/ 2>/dev/null || true
-          sudo cp -rL /usr/lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/lib/ 2>/dev/null || true
-          
-          # [TAMBAHAN BARU] Injeksi Library GCC (Mencegah -lgcc_s hilang saat linking)
-          sudo cp -rL /lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/lib/ 2>/dev/null || true
+          sudo cp -rL /usr/lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          sudo cp -rL /lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          sudo cp -rL /lib64/* $TRUE_SANDBOX/sysroot/lib64/ 2>/dev/null || true
           sudo cp -rL /usr/lib/gcc $TRUE_SANDBOX/sysroot/usr/lib/ 2>/dev/null || true
           
           # 5. TRIK NDK DUMMY
