@@ -116,10 +116,14 @@ jobs:
           
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # --- TRIK BARU: Dummy NDK untuk Bypass Validasi ---
+          # --- KEMBALIKAN PATH FIX ANDA YANG HILANG ---
+          echo "Memperbaiki sistem PATH agar coreutils (nproc, sed) terbaca..."
+          sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' build/build.sh
+          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+          
+          # --- TRIK NDK Dummy ---
           echo "Membuat struktur NDK Dummy..."
           mkdir -p $GITHUB_WORKSPACE/kernel_platform/prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-          # Beberapa konfigurasi Samsung mencari NDK secara langsung di prebuilts/ndk
           mkdir -p $GITHUB_WORKSPACE/kernel_platform/prebuilts/ndk
           mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
           
@@ -151,7 +155,7 @@ jobs:
           echo "Memulai kompilasi kernel Clang..."
           chmod +x build/build.sh
           ./build/build.sh
-
+          
       - name: Package Output
         run: |
           cd $GITHUB_WORKSPACE
