@@ -29,21 +29,34 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # Mengunduh Clang yang benar
+          # 1. Mengunduh Clang AOSP Resmi
           mkdir -p prebuilts/clang/host/linux-x86
           cd prebuilts/clang/host/linux-x86
           git clone --depth=1 -b main https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang-r487747c
           ln -sf clang-r487747c clang-r487747
-          cd $GITHUB_WORKSPACE/kernel_platform
           
-          # MENGUNDUH BUILD TOOLS & SYSROOT AOSP YANG HILANG
-          # Ini adalah kunci untuk menyelesaikan error "sys/types.h" pada HOSTCC
+          # 2. MENGUNCI PATH CLANG AGAR TIDAK "NOT FOUND"
+          # Kita kembalikan symlink Clang Anda yang terbukti ampuh, tetapi sekarang mengarah ke Clang AOSP murni
+          cd $GITHUB_WORKSPACE/kernel_platform
+          mkdir -p bin
+          mkdir -p prebuilts/bin
+          mkdir -p prebuilts-master/bin
+          
+          CLANG_BIN=$GITHUB_WORKSPACE/kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747/bin/clang
+          LLD_BIN=$GITHUB_WORKSPACE/kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747/bin/ld.lld
+          
+          ln -sf $CLANG_BIN bin/clang
+          ln -sf $LLD_BIN bin/ld.lld
+          ln -sf $CLANG_BIN prebuilts/bin/clang
+          ln -sf $CLANG_BIN prebuilts-master/bin/clang
+          
+          # 3. Mengunduh Build Tools AOSP (Solusi untuk sys/types.h)
           mkdir -p prebuilts/build-tools
           cd prebuilts/build-tools
           git clone --depth=1 -b main https://android.googlesource.com/platform/prebuilts/build-tools .
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # Dummy NDK & GCC
+          # 4. Dummy NDK & GCC
           mkdir -p prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
           mkdir -p prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
@@ -107,7 +120,11 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # Root Symlink Build
+          # 1. KUNCI PATH ABSOLUT UNTUK CLANG
+          # Ini memastikan saat make dipanggil, ia mengenali perintah 'clang'
+          sed -i '2i export PATH="'$GITHUB_WORKSPACE/kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747/bin':$PATH"' build/build.sh
+          
+          # 2. Root Symlink Build
           sudo rm -rf /build 2>/dev/null || true
           mkdir -p build
           cat << 'EOF' > build/gettop.sh
@@ -118,7 +135,7 @@ jobs:
           chmod +x build/gettop.sh
           sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
           
-          # Fix Pathing Direktori Ganda
+          # 3. Fix Pathing Direktori Ganda
           cp msm-kernel/build.config.* common/ 2>/dev/null || true
           cp common/build.config.* msm-kernel/ 2>/dev/null || true
           mkdir -p kernel_platform
@@ -129,7 +146,7 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # Environment Variables
+          # 4. Environment Variables
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
