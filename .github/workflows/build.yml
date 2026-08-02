@@ -35,26 +35,25 @@ jobs:
           git clone --depth=1 -b main https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang-r487747c
           ln -sf clang-r487747c clang-r487747
           
-          # 2. MENGUNCI PATH CLANG AGAR TIDAK "NOT FOUND"
-          # Kita kembalikan symlink Clang Anda yang terbukti ampuh, tetapi sekarang mengarah ke Clang AOSP murni
+          # 2. Mengunduh Build Tools AOSP (Ini yang berhasil menyembuhkan nproc & sys/types.h)
           cd $GITHUB_WORKSPACE/kernel_platform
-          mkdir -p bin
-          mkdir -p prebuilts/bin
-          mkdir -p prebuilts-master/bin
-          
-          CLANG_BIN=$GITHUB_WORKSPACE/kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747/bin/clang
-          LLD_BIN=$GITHUB_WORKSPACE/kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747/bin/ld.lld
-          
-          ln -sf $CLANG_BIN bin/clang
-          ln -sf $LLD_BIN bin/ld.lld
-          ln -sf $CLANG_BIN prebuilts/bin/clang
-          ln -sf $CLANG_BIN prebuilts-master/bin/clang
-          
-          # 3. Mengunduh Build Tools AOSP (Solusi untuk sys/types.h)
           mkdir -p prebuilts/build-tools
           cd prebuilts/build-tools
           git clone --depth=1 -b main https://android.googlesource.com/platform/prebuilts/build-tools .
+          
+          # 3. TAKTIK KUDA TROYA: Menjejalkan Clang langsung ke markas Build Tools
+          echo "Menyusupkan Clang ke dalam direktori Build Tools..."
           cd $GITHUB_WORKSPACE/kernel_platform
+          CLANG_BIN_DIR="$PWD/prebuilts/clang/host/linux-x86/clang-r487747/bin"
+          TARGET_BIN_DIR="$PWD/prebuilts/build-tools/linux-x86/bin"
+          TARGET_PATH_DIR="$PWD/prebuilts/build-tools/path/linux-x86"
+          
+          # Membuat symlink fisik setiap komponen clang tepat di sebelah file 'make'
+          for file in "$CLANG_BIN_DIR"/*; do
+            filename=$(basename "$file")
+            ln -sf "$file" "$TARGET_BIN_DIR/$filename" 2>/dev/null || true
+            ln -sf "$file" "$TARGET_PATH_DIR/$filename" 2>/dev/null || true
+          done
           
           # 4. Dummy NDK & GCC
           mkdir -p prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
@@ -116,15 +115,11 @@ jobs:
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (Clean AOSP Toolchain)
+      - name: Compile Kernel via Google Build System (Trojan Horse Method)
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 1. KUNCI PATH ABSOLUT UNTUK CLANG
-          # Ini memastikan saat make dipanggil, ia mengenali perintah 'clang'
-          sed -i '2i export PATH="'$GITHUB_WORKSPACE/kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747/bin':$PATH"' build/build.sh
-          
-          # 2. Root Symlink Build
+          # Root Symlink Build
           sudo rm -rf /build 2>/dev/null || true
           mkdir -p build
           cat << 'EOF' > build/gettop.sh
@@ -135,7 +130,7 @@ jobs:
           chmod +x build/gettop.sh
           sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
           
-          # 3. Fix Pathing Direktori Ganda
+          # Fix Pathing Direktori Ganda
           cp msm-kernel/build.config.* common/ 2>/dev/null || true
           cp common/build.config.* msm-kernel/ 2>/dev/null || true
           mkdir -p kernel_platform
@@ -146,7 +141,11 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # 4. Environment Variables
+          # KUNCI ABSOLUT COMPILER (Memaksa Make menggunakan Clang)
+          export LLVM=1
+          export CC=clang
+          export HOSTCC=clang
+          
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
