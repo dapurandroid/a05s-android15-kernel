@@ -111,24 +111,20 @@ jobs:
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
           # 3. THE HERMETIC TRAP (Bypass PATH Nuking TOTAL)
-          echo "Menyuntikkan utilitas ke semua sandbox GKI yang mungkin ada..."
           mkdir -p prebuilts/build-tools/path/linux-x86
-          mkdir -p build/build-tools/path/linux-x86
-          
-          # Kunci nproc, tr, sed, clang agar dieksekusi dari OS Ubuntu
           sudo ln -sf /usr/bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
-          sudo ln -sf /usr/bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
-          sudo ln -sf /bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
           
-          # 4. SYSROOT LOOPBACK (Bypass sys/types.h not found)
-          mkdir -p build/build-tools/sysroot/usr
-          mkdir -p prebuilts/build-tools/sysroot/usr
+          # 4. PHYSICAL SYSROOT MERGE (Solusi Absolut Error sys/types.h)
+          echo "Merakit sysroot fisik untuk mengecoh GKI Sandbox..."
+          mkdir -p prebuilts/build-tools/sysroot/usr/include
+          mkdir -p prebuilts/build-tools/sysroot/usr/lib
           
-          sudo ln -sf /usr/include build/build-tools/sysroot/usr/include
-          sudo ln -sf /usr/lib build/build-tools/sysroot/usr/lib
-          sudo ln -sf /usr/include prebuilts/build-tools/sysroot/usr/include
-          sudo ln -sf /usr/lib prebuilts/build-tools/sysroot/usr/lib
+          # Menggunakan cp -rL agar symlink diubah menjadi file asli saat disalin
+          sudo cp -rL /usr/include/* prebuilts/build-tools/sysroot/usr/include/ 2>/dev/null || true
+          # INI KUNCINYA: Memaksa file x86_64 masuk ke folder include utama agar ditemukan oleh Clang
+          sudo cp -rL /usr/include/x86_64-linux-gnu/* prebuilts/build-tools/sysroot/usr/include/ 2>/dev/null || true
+          sudo cp -rL /usr/lib/x86_64-linux-gnu/* prebuilts/build-tools/sysroot/usr/lib/ 2>/dev/null || true
           
           # 5. TRIK NDK DUMMY
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
