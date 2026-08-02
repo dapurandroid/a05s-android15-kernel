@@ -106,6 +106,16 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           
+          # Buat direktori out secara manual agar mktemp tidak error
+          mkdir -p out/target/product/a05s
+          mkdir -p kernel_platform/prebuilts/ndk
+          
+          # Atasi error NDK_TRIPLE dengan menyediakan path NDK tiruan atau symlink clang
+          if [ ! -d "kernel_platform/prebuilts/ndk/android-ndk-r26" ]; then
+            mkdir -p kernel_platform/prebuilts/ndk/android-ndk-r26
+            ln -sf /usr/bin/clang-17 kernel_platform/prebuilts/ndk/android-ndk-r26/clang || true
+          fi
+          
           export BUILD_TARGET=a05s_eur_open
           export MODEL=$(echo ${BUILD_TARGET} | cut -d'_' -f1)
           export PROJECT_NAME=${MODEL}
