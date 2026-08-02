@@ -110,7 +110,7 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # 3 & 4. THE TRUE HERMETIC TRAP & SYSROOT MERGE (Presisi Eksekusi)
+          # 3 & 4. THE TRUE HERMETIC TRAP & SYSROOT MERGE (Presisi Mesin Tempur)
           echo "Membersihkan rintangan dan merakit sysroot fisik..."
           TRUE_SANDBOX="build/kernel/build-tools"
           
@@ -122,14 +122,18 @@ jobs:
           mkdir -p $TRUE_SANDBOX/sysroot/usr/include
           mkdir -p $TRUE_SANDBOX/sysroot/usr/lib
           
-          # Injeksi Utilitas
+          # Injeksi Utilitas (Mencegah nproc, tr, sed hilang)
           sudo ln -sf /usr/bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           
-          # Injeksi Sysroot Fisik
+          # Injeksi Sysroot Fisik (Mencegah sys/types.h hilang)
           sudo cp -rL /usr/include/* $TRUE_SANDBOX/sysroot/usr/include/ 2>/dev/null || true
           sudo cp -rL /usr/include/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/include/ 2>/dev/null || true
           sudo cp -rL /usr/lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/lib/ 2>/dev/null || true
+          
+          # [TAMBAHAN BARU] Injeksi Library GCC (Mencegah -lgcc_s hilang saat linking)
+          sudo cp -rL /lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/lib/ 2>/dev/null || true
+          sudo cp -rL /usr/lib/gcc $TRUE_SANDBOX/sysroot/usr/lib/ 2>/dev/null || true
           
           # 5. TRIK NDK DUMMY
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
