@@ -24,33 +24,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libsqlite3-dev libgmp-dev libmpfr-dev libmpc-dev libglib2.0-dev libpixman-1-dev python3 liblz4-tool git ccache zip
 
-      - name: Setup AOSP Clang Toolchain (Sparse Checkout)
+      - name: Setup AOSP Clang Toolchain
         run: |
           cd $GITHUB_WORKSPACE
-          mkdir -p kernel_platform/prebuilts
-          cd kernel_platform/prebuilts
+          mkdir -p kernel_platform/prebuilts kernel_platform/prebuilts-master
           
-          echo "Inisialisasi Git Sparse Checkout dari Google Source..."
-          git init
-          git remote add origin https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86
-          git config core.sparseCheckout true
+          echo "Mendownload Clang-r488900 dari tag Android 14 resmi..."
+          # Menggunakan tag android-14.0.0_r1 karena folder r488900 sudah dihapus dari branch main
+          wget -q -O clang.tar.gz "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-14.0.0_r1/clang-r488900.tar.gz"
           
-          # Instruksikan Git untuk HANYA mengambil folder clang-r488900
-          echo "clang-r488900/*" >> .git/info/sparse-checkout
-          
-          # Tarik data dari server Google (Coba branch main, jika gagal coba master)
-          git fetch --depth=1 origin main || git fetch --depth=1 origin master
-          git checkout FETCH_HEAD
-          
-          # Keluarkan isi dari dalam folder clang-r488900 agar langsung berada di prebuilts
-          mv clang-r488900/* ./
-          rm -rf clang-r488900 .git
-          
-          # Gandakan ke prebuilts-master sesuai permintaan skrip Samsung
-          cd $GITHUB_WORKSPACE
-          cp -r kernel_platform/prebuilts kernel_platform/prebuilts-master
-          
-          echo "Toolchain Clang berhasil disiapkan 100%!"
+          echo "Mengekstrak Clang..."
+          tar -C kernel_platform/prebuilts -xzf clang.tar.gz
+          tar -C kernel_platform/prebuilts-master -xzf clang.tar.gz
+          rm clang.tar.gz
 
       - name: Inject KernelSU Next & SuSFS
         run: |
