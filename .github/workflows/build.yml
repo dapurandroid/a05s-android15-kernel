@@ -106,18 +106,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           
-          # 1. Amankan perintah dasar sistem dengan membikin symlink lokal di folder bin kita
-          mkdir -p $GITHUB_WORKSPACE/bin
-          ln -sf /usr/bin/nproc $GITHUB_WORKSPACE/bin/nproc
-          ln -sf /usr/bin/readlink $GITHUB_WORKSPACE/bin/readlink
-          ln -sf /usr/bin/sed $GITHUB_WORKSPACE/bin/sed
-          ln -sf /usr/bin/tr $GITHUB_WORKSPACE/bin/tr
-          ln -sf /usr/bin/basename $GITHUB_WORKSPACE/bin/basename
-          ln -sf /usr/bin/dirname $GITHUB_WORKSPACE/bin/dirname
-          ln -sf /usr/bin/sort $GITHUB_WORKSPACE/bin/sort
-          ln -sf /usr/bin/grep $GITHUB_WORKSPACE/bin/grep
-          
-          # 2. Buat struktur folder NDK
+          # 1. Buat struktur folder NDK
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p kernel_platform/prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
@@ -127,6 +116,13 @@ jobs:
           
           mkdir -p out/target/product/a05s
           
+          # 2. SOLUSI PAMUNGGKAS: Patch build/build.sh secara otomatis agar PATH sistem selalu terbaca
+          BUILD_SH_PATH=$(find . -name "build.sh" | grep -E "kernel_platform/build/build.sh|build/build.sh" | head -n 1)
+          if [ -f "$BUILD_SH_PATH" ]; then
+            echo "Memodifikasi file $BUILD_SH_PATH untuk mengamankan PATH coreutils..."
+            sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' "$BUILD_SH_PATH"
+          fi
+
           export BUILD_TARGET=a05s_eur_open
           export MODEL=$(echo ${BUILD_TARGET} | cut -d'_' -f1)
           export PROJECT_NAME=${MODEL}
@@ -158,7 +154,6 @@ jobs:
             ../vendor/qcom/opensource/audio-kernel \
             ../vendor/qcom/opensource/camera-kernel"
           
-          # Paksa PATH menunjuk ke folder bin lokal kita yang berisi symlink mutlak
           export PATH="$GITHUB_WORKSPACE/bin:$GITHUB_WORKSPACE/kernel_platform/prebuilts/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           
           chmod +x build_kernel_GKI.sh
