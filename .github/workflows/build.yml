@@ -43,13 +43,15 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           
-          # Cari folder kernel utama di dalam kernel_platform
-          KERNEL_DIR=$(find kernel_platform/ -maxdepth 2 -type f -name "Makefile" -exec dirname {} \; | head -n 1)
+          # Cari folder kernel utama secara dinamis yang berisi folder drivers/ dan fs/
+          KERNEL_DIR=$(find kernel_platform/ -type d -name "drivers" -exec dirname {} \; | head -n 1)
           echo "Kernel Directory ditemukan di: $KERNEL_DIR"
           echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
           
-          # Inject KernelSU Next
+          # Masuk ke folder kernel utama
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
+          
+          # Inject KernelSU Next (Gunakan curl dan eksekusi di lokasi kernel)
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
           
           # Clone SuSFS khusus Kernel 5.15
@@ -68,12 +70,16 @@ jobs:
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/include/linux/* ./include/linux/ 2>/dev/null || true
           
           patch -p1 < 50_add_susfs_in_kernel-5.10.patch || true
-
+          
       - name: Enable KSU & SuSFS Configurations
         run: |
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
           echo "Menggunakan Config File: $DEFCONFIG_FILE"
+          
+          # Pastikan konfigurasi SuSFS dan KSU aktif
+          sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG_FILE 2>/dev/null || true
           
           echo "CONFIG_KSU=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS=y" >> $DEFCONFIG_FILE
@@ -84,7 +90,7 @@ jobs:
           echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
-
+          
       - name: Compile Kernel via Samsung Official Script
         run: |
           cd $GITHUB_WORKSPACE
