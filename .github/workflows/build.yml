@@ -102,38 +102,46 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
 
-      - name: Compile Kernel via Google Build System (Strict Copy - No Dummy)
+      - name: Compile Kernel via Google Build System (Custom Root Wrapper)
         run: |
+          # 1. Normalisasi format baris
           sudo apt-get install dos2unix -y
           find . -type f -name "*.sh" -exec dos2unix {} +
           
-          cd $GITHUB_WORKSPACE/kernel_platform
+          # 2. TETAP DI ROOT WORKSPACE (Kunci utama dari metode ini)
+          cd $GITHUB_WORKSPACE
           
-          echo "Menyalin file konfigurasi asli ke direktori ekspektasi vendor..."
-          mkdir -p kernel_platform/common
-          mkdir -p kernel_platform/msm-kernel
+          echo "Merakit Custom Root Wrapper..."
+          cat << 'EOF' > build_a05s_custom.sh
+          #!/bin/bash
           
-          # Copy seluruh file fisik asli
-          cp -r common/* kernel_platform/common/ 2>/dev/null || true
-          cp -r msm-kernel/* kernel_platform/msm-kernel/ 2>/dev/null || true
+          # 3. Kunci direktori mutlak dari Root
+          export ROOT_DIR=$PWD
+          export ANDROID_BUILD_TOP=$PWD
+          export OUT_DIR=$ROOT_DIR/out
           
-          # Cari file config asli dan salin ke direktori target tanpa membuat dummy
-          echo "Mencari file build.config.msm.common asli..."
-          find . -name "build.config.msm.common" -exec cp {} kernel_platform/common/ \;
+          mkdir -p $OUT_DIR/target/product/a05s
           
+          # Bypass folder NDK jika rilis vendor mencarinya
+          mkdir -p prebuilts/ndk
+          
+          # 4. Bypass prompt interaktif (Y/N) bawaan vendor
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
           
-          export BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec
-          export CHIPSET_NAME=sm6225
+          # 5. Ekspor target kompilasi
           export TARGET_PRODUCT=gki
+          export CHIPSET_NAME=sm6225
+          export BUILD_CONFIG=kernel_platform/msm-kernel/build.config.msm.m269.sec
           
-          export OUT_DIR=$GITHUB_WORKSPACE/out
-          mkdir -p $OUT_DIR
+          echo "Mengeksekusi GKI Build System dari Root..."
+          # Eksekusi memanggil ke dalam, bukan dari dalam
+          ./kernel_platform/build/build.sh
+          EOF
           
-          echo "Memulai kompilasi kernel Clang..."
-          chmod +x build/build.sh
-          ./build/build.sh
+          # 6. Beri akses dan jalankan
+          chmod +x build_a05s_custom.sh
+          ./build_a05s_custom.sh
           
       - name: Package Output
         run: |
