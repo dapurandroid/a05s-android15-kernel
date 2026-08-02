@@ -19,48 +19,18 @@ jobs:
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
-      - name: Install Build Dependencies
+      - name: Install Build Dependencies (Super Cepat)
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libsqlite3-dev libgmp-dev libmpfr-dev libmpc-dev libglib2.0-dev libpixman-1-dev python3 liblz4-tool git ccache zip dos2unix
+          # Menggunakan clang-17 bawaan Ubuntu, menghemat 11 menit waktu unduh AOSP!
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libsqlite3-dev libgmp-dev libmpfr-dev libmpc-dev libglib2.0-dev libpixman-1-dev python3 liblz4-tool git ccache zip dos2unix clang-17 lld-17 llvm-17
           find . -type f -name "*.sh" -exec dos2unix {} +
-
-      - name: Download AOSP Toolchains & Build Tools
-        run: |
-          cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 1. Mengunduh Clang AOSP Resmi
-          mkdir -p prebuilts/clang/host/linux-x86
-          cd prebuilts/clang/host/linux-x86
-          git clone --depth=1 -b main https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang-r487747c
-          ln -sf clang-r487747c clang-r487747
-          
-          # 2. Mengunduh Build Tools AOSP (Ini yang berhasil menyembuhkan nproc & sys/types.h)
-          cd $GITHUB_WORKSPACE/kernel_platform
-          mkdir -p prebuilts/build-tools
-          cd prebuilts/build-tools
-          git clone --depth=1 -b main https://android.googlesource.com/platform/prebuilts/build-tools .
-          
-          # 3. TAKTIK KUDA TROYA: Menjejalkan Clang langsung ke markas Build Tools
-          echo "Menyusupkan Clang ke dalam direktori Build Tools..."
-          cd $GITHUB_WORKSPACE/kernel_platform
-          CLANG_BIN_DIR="$PWD/prebuilts/clang/host/linux-x86/clang-r487747/bin"
-          TARGET_BIN_DIR="$PWD/prebuilts/build-tools/linux-x86/bin"
-          TARGET_PATH_DIR="$PWD/prebuilts/build-tools/path/linux-x86"
-          
-          # Membuat symlink fisik setiap komponen clang tepat di sebelah file 'make'
-          for file in "$CLANG_BIN_DIR"/*; do
-            filename=$(basename "$file")
-            ln -sf "$file" "$TARGET_BIN_DIR/$filename" 2>/dev/null || true
-            ln -sf "$file" "$TARGET_PATH_DIR/$filename" 2>/dev/null || true
-          done
-          
-          # 4. Dummy NDK & GCC
-          mkdir -p prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
-          mkdir -p prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9
-          mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-          mkdir -p prebuilts/ndk
-          mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
+          # GLOBAL SYMLINK: Memaku Clang ke sistem dasar agar /bin/sh milik 'make' tidak pernah buta
+          sudo ln -sf /usr/bin/clang-17 /usr/bin/clang
+          sudo ln -sf /usr/bin/clang-17 /bin/clang
+          sudo ln -sf /usr/bin/ld.lld-17 /usr/bin/ld.lld
+          sudo ln -sf /usr/bin/ld.lld-17 /bin/ld.lld
 
       - name: Inject KernelSU Next & SuSFS
         run: |
@@ -115,11 +85,11 @@ jobs:
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (Trojan Horse Method)
+      - name: Compile Kernel via Google Build System (Fast Native Mode)
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # Root Symlink Build
+          # 1. ROOT SYMLINK BUILD (Fix gettop.sh)
           sudo rm -rf /build 2>/dev/null || true
           mkdir -p build
           cat << 'EOF' > build/gettop.sh
@@ -130,7 +100,7 @@ jobs:
           chmod +x build/gettop.sh
           sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
           
-          # Fix Pathing Direktori Ganda
+          # 2. PHYSICAL CLONE (Fix Pathing Direktori Ganda)
           cp msm-kernel/build.config.* common/ 2>/dev/null || true
           cp common/build.config.* msm-kernel/ 2>/dev/null || true
           mkdir -p kernel_platform
@@ -141,11 +111,26 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # KUNCI ABSOLUT COMPILER (Memaksa Make menggunakan Clang)
-          export LLVM=1
-          export CC=clang
-          export HOSTCC=clang
+          # 3. THE HERMETIC TRAP & SYSROOT LOOPBACK
+          echo "Memasang cermin sysroot dan utilitas untuk mengecoh GKI Sandbox..."
+          mkdir -p prebuilts/build-tools/path/linux-x86
+          mkdir -p prebuilts/build-tools/sysroot/usr
           
+          # Mengatasi nproc, sed, clang hilang
+          sudo ln -sf /usr/bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
+          sudo ln -sf /bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
+          
+          # Mengatasi 'sys/types.h' not found tanpa perlu mendownload AOSP
+          # Menyambungkan sysroot palsu Google LANGSUNG ke jantung OS Ubuntu
+          sudo ln -sf /usr/include prebuilts/build-tools/sysroot/usr/include
+          sudo ln -sf /usr/lib prebuilts/build-tools/sysroot/usr/lib
+          
+          # 4. TRIK NDK DUMMY
+          mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+          mkdir -p prebuilts/ndk
+          mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
+          
+          # 5. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
@@ -156,7 +141,12 @@ jobs:
           export OUT_DIR=$GITHUB_WORKSPACE/out
           mkdir -p $OUT_DIR
           
-          echo "Memulai kompilasi kernel..."
+          # Memaksa kompiler agar 100% menggunakan native clang
+          export LLVM=1
+          export CC=clang
+          export HOSTCC=clang
+          
+          echo "Memulai kompilasi kernel Super Cepat (Native Clang)..."
           chmod +x build/build.sh
           ./build/build.sh
 
