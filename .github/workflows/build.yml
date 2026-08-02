@@ -102,37 +102,36 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
 
-      - name: Compile Kernel via Google Build System (Fixed Path)
+      - name: Compile Kernel via Google Build System (Sed Patch Method)
         run: |
-          # 1. Konversi format baris dari sistem lokal ke Unix (wajib dipertahankan)
+          # 1. Normalisasi format baris (Wajib untuk script bash)
           sudo apt-get install dos2unix -y
           find . -type f -name "*.sh" -exec dos2unix {} +
+          find . -type f -name "build.config.*" -exec dos2unix {} +
           
-          # 2. Masuk langsung ke kernel_platform
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 3. TRIK JITU: INCEPTION SYMLINK
-          # Memantulkan pencarian "kernel_platform/kernel_platform/" kembali ke induknya.
-          echo "Membuat Inception Symlink..."
-          ln -sf . kernel_platform
+          # 2. MENEBAS AKAR MASALAH (SED PATCHING)
+          # Menghapus string "kernel_platform/" yang hardcoded secara keliru di seluruh file konfigurasi vendor
+          echo "Memperbaiki hardcoded paths di file konfigurasi Samsung/Qualcomm..."
+          find . -type f -name "build.config.*" -exec sed -i 's|kernel_platform/||g' {} +
           
-          # 4. Bypass AOSP Check & Nonaktifkan Interaksi
+          # 3. Kunci Environment Variables Bawaan Google
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
           
-          # 5. Set parameter. BUILD_CONFIG kini murni relatif dari dalam kernel_platform
           export BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec
           export CHIPSET_NAME=sm6225
           export TARGET_PRODUCT=gki
           
-          # 6. Kunci OUT_DIR di luar kernel_platform agar file output zip aman
+          # 4. Lempar output ke luar folder agar tidak mengganggu tree kernel
           export OUT_DIR=$GITHUB_WORKSPACE/out
           mkdir -p $OUT_DIR
           
           echo "Memulai kompilasi kernel Clang..."
           chmod +x build/build.sh
           
-          # Eksekusi standar Google. Symlink akan menangani semua inkonsistensi internal Samsung.
+          # Eksekusi standar Google. Kode vendor yang cacat sudah kita perbaiki di memori.
           ./build/build.sh
           
       - name: Package Output
