@@ -109,20 +109,19 @@ jobs:
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (Restoring Your Original Fix)
+      - name: Compile Kernel via Google Build System (Root Symlink Fix)
         run: |
           sudo apt-get install dos2unix -y
           find . -type f -name "*.sh" -exec dos2unix {} +
           
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # --- 1. KEMBALIKAN HACK ASLI ANDA UNTUK GETTOP & BUILD_UTILS ---
-          echo "Memulihkan hack gettop.sh dan /build/build_utils.sh milik Anda..."
-          sudo mkdir -p /build
-          sudo cp -f build/build_utils.sh /build/build_utils.sh 2>/dev/null || true
-          # Jaga-jaga jika file aslinya benar-benar hilang dari tarball Samsung
-          sudo touch /build/build_utils.sh 
+          # --- 1. PENCEGAHAN TOTAL: SYMLINK SELURUH FOLDER BUILD KE ROOT ---
+          echo "Membuat symlink seluruh folder build lokal ke /build OS..."
+          # Pastikan /build kosong sebelum ditautkan
+          sudo rm -rf /build 2>/dev/null || true
           
+          # Buat file gettop.sh buatan Anda di folder lokal
           mkdir -p build
           cat << 'EOF' > build/gettop.sh
           gettop() {
@@ -131,8 +130,11 @@ jobs:
           EOF
           chmod +x build/gettop.sh
           
-          # --- 2. KEMBALIKAN PATH FIX ANDA ---
-          echo "Memperbaiki sistem PATH agar coreutils (nproc, sed) terbaca..."
+          # Ini kunci pamungkasnya: menautkan seluruh folder
+          sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
+          
+          # --- 2. KEMBALIKAN PATH FIX ---
+          echo "Memperbaiki sistem PATH agar coreutils terbaca..."
           sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' build/build.sh
           export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
           
@@ -156,7 +158,9 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # --- 5. ENVIRONMENT VARIABLES ---
+          # --- 5. KUNCI ENVIRONMENT VARIABLES ---
+          # Memastikan ROOT_DIR diisi dengan paksa sejak awal
+          export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
           
