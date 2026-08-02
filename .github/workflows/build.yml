@@ -117,7 +117,7 @@ jobs:
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (Hermetic Sysroot Fix)
+      - name: Compile Kernel via Google Build System (Sysroot Nuke Fix)
         run: |
           sudo apt-get install dos2unix -y
           find . -type f -name "*.sh" -exec dos2unix {} +
@@ -135,8 +135,7 @@ jobs:
           chmod +x build/gettop.sh
           sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
           
-          # --- 2. SOLUSI ELEGAN: THE HERMETIC TRAP (Bypass PATH & Sysroot Nuking) ---
-          echo "Menyuntikkan host binaries & sysroot ke dalam sandbox GKI..."
+          # --- 2. THE HERMETIC TRAP (Bypass PATH Nuking) ---
           mkdir -p prebuilts/build-tools/path/linux-x86
           mkdir -p build/build-tools/path/linux-x86
           sudo ln -sf /usr/bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
@@ -144,17 +143,21 @@ jobs:
           sudo ln -sf /usr/bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
           
-          # [INI KUNCI UNTUK ERROR sys/types.h]
-          # Menyambungkan Sysroot GKI ke Root OS Ubuntu agar kompiler menemukan header Linux
-          mkdir -p build/build-tools
-          sudo ln -sf / build/build-tools/sysroot
+          # --- 3. [BARU] SYSROOT NUKE: Memaksa Clang membaca header Ubuntu ---
+          echo "Menghapus isolasi sysroot dan memaksa include path Ubuntu..."
+          # Menghapus argumen --sysroot dari build.sh agar tidak mengunci Clang
+          sed -i 's/--sysroot=[^ "]*//g' build/build.sh 2>/dev/null || true
           
-          # --- 3. TRIK NDK Dummy ---
+          # Memaksa kernel Makefile untuk menyertakan folder include bawaan Ubuntu
+          sed -i 's/HOSTCFLAGS   =/HOSTCFLAGS   = -I\/usr\/include -I\/usr\/include\/x86_64-linux-gnu /g' common/Makefile 2>/dev/null || true
+          sed -i 's/HOSTCFLAGS   =/HOSTCFLAGS   = -I\/usr\/include -I\/usr\/include\/x86_64-linux-gnu /g' msm-kernel/Makefile 2>/dev/null || true
+          
+          # --- 4. TRIK NDK Dummy ---
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p prebuilts/ndk
           mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
           
-          # --- 4. PHYSICAL CLONE (Fix Pathing Direktori Ganda) ---
+          # --- 5. PHYSICAL CLONE (Fix Pathing Direktori Ganda) ---
           cp msm-kernel/build.config.* common/ 2>/dev/null || true
           cp common/build.config.* msm-kernel/ 2>/dev/null || true
           
@@ -167,7 +170,7 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # --- 5. KUNCI ENVIRONMENT VARIABLES ---
+          # --- 6. KUNCI ENVIRONMENT VARIABLES ---
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
