@@ -102,26 +102,25 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
 
-      - name: Compile Kernel via Google Build System (Ultimate Fix)
+      - name: Compile Kernel via Google Build System (Strict Copy - No Dummy)
         run: |
-          # 1. Normalisasi format baris
           sudo apt-get install dos2unix -y
           find . -type f -name "*.sh" -exec dos2unix {} +
           
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          echo "Mengeksekusi Sed Patching tingkat lanjut..."
-          # Patching untuk file biasa
-          find . -name "build.config.*" -type f -exec sed -i 's|kernel_platform/||g' {} +
-          # Patching menembus Symlink (Ini yang menghentikan error sebelumnya)
-          find . -name "build.config.*" -type l -exec sed -i --follow-symlinks 's|kernel_platform/||g' {} +
+          echo "Menyalin file konfigurasi asli ke direktori ekspektasi vendor..."
+          mkdir -p kernel_platform/common
+          mkdir -p kernel_platform/msm-kernel
           
-          echo "Mengaktifkan OS-Level Bind Mount sebagai jaring pengaman..."
-          # Memanipulasi file system di level kernel OS untuk melayani direktori ganda
-          mkdir -p kernel_platform
-          sudo mount --bind $PWD $PWD/kernel_platform
+          # Copy seluruh file fisik asli
+          cp -r common/* kernel_platform/common/ 2>/dev/null || true
+          cp -r msm-kernel/* kernel_platform/msm-kernel/ 2>/dev/null || true
           
-          # 2. Kunci Environment Variables Bawaan Google
+          # Cari file config asli dan salin ke direktori target tanpa membuat dummy
+          echo "Mencari file build.config.msm.common asli..."
+          find . -name "build.config.msm.common" -exec cp {} kernel_platform/common/ \;
+          
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
           
@@ -129,14 +128,11 @@ jobs:
           export CHIPSET_NAME=sm6225
           export TARGET_PRODUCT=gki
           
-          # 3. Lempar output ke luar folder agar tidak mengganggu tree kernel
           export OUT_DIR=$GITHUB_WORKSPACE/out
           mkdir -p $OUT_DIR
           
           echo "Memulai kompilasi kernel Clang..."
           chmod +x build/build.sh
-          
-          # Eksekusi standar Google. Segala inkonsistensi path sudah dilumpuhkan.
           ./build/build.sh
           
       - name: Package Output
