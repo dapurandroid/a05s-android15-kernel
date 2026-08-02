@@ -102,65 +102,53 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
 
-      - name: Compile Kernel via Samsung Official Script
+      - name: Compile Kernel via Google Build System
         run: |
-          # 1. Masuk ke dalam kernel_platform terlebih dahulu karena seluruh struktur GKI berpusat di sini
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 2. Siapkan struktur folder NDK di dalam root dan kernel_platform
+          # 1. Pastikan struktur folder NDK terpenuhi agar tidak divalidasi gagal
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p ../prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p ../external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           
           ln -sf /usr/bin/clang-17 prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/clang || true
-          ln -sf /usr/bin/clang-17 ../prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/clang || true
           
-          mkdir -p ../out/target/product/a05s
-          
-          # 3. Patch build/build.sh agar PATH coreutils aman dari dalam kernel_platform
+          # 2. Patch build/build.sh agar perintah dasar coreutils (sed, nproc, readlink, tr) selalu terbaca aman
           if [ -f "build/build.sh" ]; then
             sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' build/build.sh
           fi
 
-          export BUILD_TARGET=a05s_eur_open
-          export MODEL=$(echo ${BUILD_TARGET} | cut -d'_' -f1)
-          export PROJECT_NAME=${MODEL}
-          export REGION=$(echo ${BUILD_TARGET} | cut -d'_' -f2)
-          export CARRIER=$(echo ${BUILD_TARGET} | cut -d'_' -f3)
-          export TARGET_BUILD_VARIANT=user
+          # 3. Deklarasikan variabel environment Google GKI secara mandiri dan akurat
+          export ANDROID_BUILD_TOP=$GITHUB_WORKSPACE
+          export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           
           export CHIPSET_NAME=sm6225
-          export ANDROID_BUILD_TOP=$GITHUB_WORKSPACE
           export TARGET_PRODUCT=gki
           export TARGET_BOARD_PLATFORM=gki
           
-          export ANDROID_PRODUCT_OUT=${ANDROID_BUILD_TOP}/out/target/product/${MODEL}
           export OUT_DIR=${ANDROID_BUILD_TOP}/out/msm-kernel-${CHIPSET_NAME}-${TARGET_PRODUCT}
-          export MODNAME=audio_dlkm
+          export ANDROID_PRODUCT_OUT=${ANDROID_BUILD_TOP}/out/target/product/a05s
           
-          export KBUILD_EXTRA_SYMBOLS="${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mmrm-driver/Module.symvers \
-              ${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mm-drivers/hw_fence/Module.symvers \
-              ${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mm-drivers/sync_fence/Module.symvers \
-              ${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mm-drivers/msm_ext_display/Module.symvers \
-              ${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/securemsm-kernel/Module.symvers"
-          
-          export KBUILD_EXT_MODULES="vendor/qcom/opensource/mm-drivers/msm_ext_display \
-            vendor/qcom/opensource/mm-drivers/sync_fence \
-            vendor/qcom/opensource/mm-drivers/hw_fence \
-            vendor/qcom/opensource/mmrm-driver \
-            vendor/qcom/opensource/securemsm-kernel \
-            vendor/qcom/opensource/display-drivers/msm \
-            vendor/qcom/opensource/audio-kernel \
-            vendor/qcom/opensource/camera-kernel"
+          # Path ekstensi modul luar (Qcom drivers)
+          export EXT_MODULES="../vendor/qcom/opensource/mm-drivers/msm_ext_display \
+            ../vendor/qcom/opensource/mm-drivers/sync_fence \
+            ../vendor/qcom/opensource/mm-drivers/hw_fence \
+            ../vendor/qcom/opensource/mmrm-driver \
+            ../vendor/qcom/opensource/securemsm-kernel \
+            ../vendor/qcom/opensource/display-drivers/msm \
+            ../vendor/qcom/opensource/audio-kernel \
+            ../vendor/qcom/opensource/camera-kernel"
           
           export PATH="$GITHUB_WORKSPACE/bin:$GITHUB_WORKSPACE/kernel_platform/prebuilts/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           
-          chmod +x ../build_kernel_GKI.sh
-          chmod +x build/android/prepare_vendor.sh 2>/dev/null || true
-          
-          # 4. Eksekusi skrip utama Samsung dari root workspace dengan memanggil path relatifnya
-          cd $GITHUB_WORKSPACE
-          echo "y" | ./build_kernel_GKI.sh a05s_eur_open user sm6225
+          # 4. Eksekusi langsung build.sh milik Google menggunakan konfigurasi kernel m269 (A05s)
+          # Menggunakan file config target yang terbaca di log sebelumnya
+          ./build/build.sh \
+            ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform \
+            KERNEL_DIR=msm-kernel \
+            BRANCH=android15-6.1 \
+            BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec \
+            FILES="arch/arm64/boot/Image arch/arm64/boot/Image.gz"
           
       - name: Package Output
         run: |
