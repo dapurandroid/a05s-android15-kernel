@@ -25,7 +25,7 @@ jobs:
           sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libsqlite3-dev libgmp-dev libmpfr-dev libmpc-dev libglib2.0-dev libpixman-1-dev python3 liblz4-tool git ccache zip dos2unix clang-17 lld-17 llvm-17
           find . -type f -name "*.sh" -exec dos2unix {} +
           
-          # Memaku Clang ke sistem dasar agar tidak pernah "not found"
+          # Memaku Clang ke sistem dasar
           sudo ln -sf /usr/bin/clang-17 /usr/bin/clang
           sudo ln -sf /usr/bin/clang-17 /bin/clang
           sudo ln -sf /usr/bin/ld.lld-17 /usr/bin/ld.lld
@@ -84,7 +84,7 @@ jobs:
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (Fast Native Mode)
+      - name: Compile Kernel via Google Build System (Absolute Precision)
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
@@ -110,19 +110,33 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # 3. THE HERMETIC TRAP (Bypass PATH Nuking TOTAL)
+          # 3. THE HERMETIC TRAP (Bypass PATH Nuking TOTAL - PRESISI MESIN TEMPUR)
+          echo "Menyuntikkan utilitas ke SEMUA sandbox GKI..."
           mkdir -p prebuilts/build-tools/path/linux-x86
+          mkdir -p build/build-tools/path/linux-x86
+          
+          # Injeksi ke prebuilts
           sudo ln -sf /usr/bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
           
-          # 4. PHYSICAL SYSROOT MERGE (Solusi Absolut Error sys/types.h)
-          echo "Merakit sysroot fisik untuk mengecoh GKI Sandbox..."
+          # INI YANG TERLEWAT SEBELUMNYA: Injeksi ke folder build
+          sudo ln -sf /usr/bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
+          sudo ln -sf /bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
+          
+          # 4. PHYSICAL SYSROOT MERGE (Digandakan ke kedua target)
+          echo "Merakit sysroot fisik di prebuilts dan build..."
+          mkdir -p build/build-tools/sysroot/usr/include
+          mkdir -p build/build-tools/sysroot/usr/lib
           mkdir -p prebuilts/build-tools/sysroot/usr/include
           mkdir -p prebuilts/build-tools/sysroot/usr/lib
           
-          # Menggunakan cp -rL agar symlink diubah menjadi file asli saat disalin
+          # Salin ke folder build
+          sudo cp -rL /usr/include/* build/build-tools/sysroot/usr/include/ 2>/dev/null || true
+          sudo cp -rL /usr/include/x86_64-linux-gnu/* build/build-tools/sysroot/usr/include/ 2>/dev/null || true
+          sudo cp -rL /usr/lib/x86_64-linux-gnu/* build/build-tools/sysroot/usr/lib/ 2>/dev/null || true
+          
+          # Salin ke folder prebuilts
           sudo cp -rL /usr/include/* prebuilts/build-tools/sysroot/usr/include/ 2>/dev/null || true
-          # INI KUNCINYA: Memaksa file x86_64 masuk ke folder include utama agar ditemukan oleh Clang
           sudo cp -rL /usr/include/x86_64-linux-gnu/* prebuilts/build-tools/sysroot/usr/include/ 2>/dev/null || true
           sudo cp -rL /usr/lib/x86_64-linux-gnu/* prebuilts/build-tools/sysroot/usr/lib/ 2>/dev/null || true
           
