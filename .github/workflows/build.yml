@@ -17,7 +17,7 @@ jobs:
           remove-android: 'true'
           remove-haskell: 'true'
 
-      # 2. BARU UNDUH KODE KE HARDISK YANG SUDAH KOSONG DAN BESAR
+      # 2. UNDUH KODE KE HARDISK
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
@@ -50,17 +50,13 @@ jobs:
           elif [ -d "kernel_platform/msm-kernel/drivers" ]; then
             KERNEL_DIR="kernel_platform/msm-kernel"
           else
-            echo "[ERROR] Folder drivers/ tidak ditemukan di common maupun msm-kernel!"
-            echo "Menampilkan isi root kernel_platform untuk debugging:"
-            ls -la kernel_platform/
+            echo "[ERROR] Folder drivers/ tidak ditemukan!"
             exit 1
           fi
           
-          echo "Kernel Directory valid ditemukan di: $KERNEL_DIR"
           echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
           
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
-          
           echo "Menyuntikkan KernelSU Next..."
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
           
@@ -78,7 +74,6 @@ jobs:
           
           for patchfile in 50_add_susfs_in_kernel-*.patch; do
             if [ -f "$patchfile" ]; then
-              echo "Menerapkan patch: $patchfile"
               patch -p1 < "$patchfile" || true
             fi
           done
@@ -87,7 +82,6 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
-          echo "Menggunakan Config File: $DEFCONFIG_FILE"
           
           sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG_FILE 2>/dev/null || true
@@ -107,63 +101,60 @@ jobs:
           cd $GITHUB_WORKSPACE
           echo "Mematikan kompilasi modul sec.ko (Samsung Security)..."
           
-          # Menghapus referensi sec_common dari Makefiles vendor agar tidak ikut dikompilasi
+          # Menghapus referensi sec_common dari Makefiles vendor
           find vendor/qcom/opensource -name "Makefile" -type f -exec sed -i '/sec_common/d' {} + || true
           find vendor/qcom/opensource -name "Kconfig" -type f -exec sed -i 's/source "vendor\/qcom\/opensource\/sec_common\/Kconfig"//g' {} + || true
           
-          # Membuat file modules.blocklist sebagai jaring pengaman ekstra untuk Loadable Kernel Modules (LKM)
+          # Membuat file modules.blocklist sebagai jaring pengaman ekstra
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
-          echo "Modul sec.ko berhasil dimasukkan ke daftar hitam!"
 
-      - name: Compile Kernel via Google Build System (Path Harmony Fix)
+      - name: Compile Kernel via Google Build System (Ultimate Brute Force)
         run: |
-          # 1. Normalisasi format baris
           sudo apt-get install dos2unix -y
           find . -type f -name "*.sh" -exec dos2unix {} +
           
-          # 2. Tetap di Root Workspace
-          cd $GITHUB_WORKSPACE
+          cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 3. SOLUSI MUTLAK UNTUK BARIS 3
-          # Membuat symlink msm-kernel di root agar baris 3 tidak error saat memanggilnya
-          ln -sf kernel_platform/msm-kernel msm-kernel
+          # 1. CROSS-POLLINATION: Menukar dan melengkapi file konfigurasi
+          # Jika Samsung mencari file msm di folder common, kita sediakan filenya!
+          echo "Menyebar file konfigurasi ke seluruh folder target..."
+          cp msm-kernel/build.config.* common/ 2>/dev/null || true
+          cp common/build.config.* msm-kernel/ 2>/dev/null || true
           
-          echo "Merakit Custom Root Wrapper..."
-          cat << 'EOF' > build_a05s_custom.sh
-          #!/bin/bash
+          # 2. PHYSICAL CLONE: Membuat direktori ganda secara fisik
+          # Menghentikan error path "kernel_platform/kernel_platform/..."
+          mkdir -p kernel_platform
+          cp -a common kernel_platform/ 2>/dev/null || true
+          cp -a msm-kernel kernel_platform/ 2>/dev/null || true
           
-          # Kunci direktori mutlak dari Root
-          export ROOT_DIR=$PWD
-          export ANDROID_BUILD_TOP=$PWD
-          export OUT_DIR=$ROOT_DIR/out
+          # 3. Kunci Mutlak: Menyalin spesifik file yang error di baris 33 & 34 ke folder jebakan
+          find . -name "build.config.msm.common" -exec cp {} kernel_platform/common/ \; 2>/dev/null || true
+          find . -name "build.config.msm.gki" -exec cp {} kernel_platform/common/ \; 2>/dev/null || true
+          find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
+          find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          mkdir -p $OUT_DIR/target/product/a05s
-          mkdir -p prebuilts/ndk
-          
-          # Bypass GKI & Vendor Check
+          # 4. Kunci Environment Google
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
           
-          # Ekspor target kompilasi
-          export TARGET_PRODUCT=gki
+          export BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec
           export CHIPSET_NAME=sm6225
-          export BUILD_CONFIG=kernel_platform/msm-kernel/build.config.msm.m269.sec
+          export TARGET_PRODUCT=gki
           
-          echo "Mengeksekusi GKI Build System..."
-          bash ./kernel_platform/build/build.sh
-          EOF
+          export OUT_DIR=$GITHUB_WORKSPACE/out
+          mkdir -p $OUT_DIR
           
-          # 4. Beri akses dan eksekusi
-          chmod +x build_a05s_custom.sh
-          ./build_a05s_custom.sh
-          
+          echo "Memulai kompilasi kernel Clang..."
+          chmod +x build/build.sh
+          ./build/build.sh
+
       - name: Package Output
         run: |
           cd $GITHUB_WORKSPACE
           mkdir -p output
           
-          # Menyalin Image dan semua modul .ko KECUALI sec.ko jika masih lolos
+          # Menyalin Image dan modul .ko KECUALI sec.ko
           echo "Mengemas kernel dan modul LKM..."
           find . -name "Image" -o -name "Image.gz" -o -name "*.ko" | grep -v "sec.ko" | xargs -I {} cp {} output/ 2>/dev/null || true
           
