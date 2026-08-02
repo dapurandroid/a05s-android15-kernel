@@ -111,11 +111,9 @@ jobs:
           mkdir -p external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p kernel_platform/prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           
-          # Buat symlink Clang agar terbaca sebagai compiler NDK
           ln -sf /usr/bin/clang-17 prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/clang || true
           ln -sf /usr/bin/clang-17 external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/clang || true
           
-          # 2. Buat direktori out Samsung
           mkdir -p out/target/product/a05s
           
           export BUILD_TARGET=a05s_eur_open
@@ -149,12 +147,12 @@ jobs:
             ../vendor/qcom/opensource/audio-kernel \
             ../vendor/qcom/opensource/camera-kernel"
           
-          export PATH="$GITHUB_WORKSPACE/bin:$GITHUB_WORKSPACE/kernel_platform/prebuilts/bin:$PATH"
+          # KUNCI UTAMA: Gabungkan custom toolchain path DITAMBAH path sistem dasar Linux (/usr/bin:/bin)
+          export PATH="$GITHUB_WORKSPACE/bin:$GITHUB_WORKSPACE/kernel_platform/prebuilts/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           
           chmod +x build_kernel_GKI.sh
           chmod +x kernel_platform/build/android/prepare_vendor.sh 2>/dev/null || true
           
-          # Jalankan skrip dengan pipa 'echo y' untuk menjawab otomatis prompt 'gki wasn't an option! Continue?'
           echo "y" | ./build_kernel_GKI.sh a05s_eur_open user sm6225
 
       - name: Package Output
