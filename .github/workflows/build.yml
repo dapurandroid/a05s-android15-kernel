@@ -19,14 +19,13 @@ jobs:
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
-      - name: Install Build Dependencies (Super Cepat)
+      - name: Install Build Dependencies (Super Kilat)
         run: |
           sudo apt-get update
-          # Menggunakan clang-17 bawaan Ubuntu, menghemat 11 menit waktu unduh AOSP!
           sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libsqlite3-dev libgmp-dev libmpfr-dev libmpc-dev libglib2.0-dev libpixman-1-dev python3 liblz4-tool git ccache zip dos2unix clang-17 lld-17 llvm-17
           find . -type f -name "*.sh" -exec dos2unix {} +
           
-          # GLOBAL SYMLINK: Memaku Clang ke sistem dasar agar /bin/sh milik 'make' tidak pernah buta
+          # Memaku Clang ke sistem dasar agar tidak pernah "not found"
           sudo ln -sf /usr/bin/clang-17 /usr/bin/clang
           sudo ln -sf /usr/bin/clang-17 /bin/clang
           sudo ln -sf /usr/bin/ld.lld-17 /usr/bin/ld.lld
@@ -89,7 +88,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 1. ROOT SYMLINK BUILD (Fix gettop.sh)
+          # 1. ROOT SYMLINK BUILD
           sudo rm -rf /build 2>/dev/null || true
           mkdir -p build
           cat << 'EOF' > build/gettop.sh
@@ -100,7 +99,7 @@ jobs:
           chmod +x build/gettop.sh
           sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
           
-          # 2. PHYSICAL CLONE (Fix Pathing Direktori Ganda)
+          # 2. PHYSICAL CLONE
           cp msm-kernel/build.config.* common/ 2>/dev/null || true
           cp common/build.config.* msm-kernel/ 2>/dev/null || true
           mkdir -p kernel_platform
@@ -111,26 +110,32 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # 3. THE HERMETIC TRAP & SYSROOT LOOPBACK
-          echo "Memasang cermin sysroot dan utilitas untuk mengecoh GKI Sandbox..."
+          # 3. THE HERMETIC TRAP (Bypass PATH Nuking TOTAL)
+          echo "Menyuntikkan utilitas ke semua sandbox GKI yang mungkin ada..."
           mkdir -p prebuilts/build-tools/path/linux-x86
-          mkdir -p prebuilts/build-tools/sysroot/usr
+          mkdir -p build/build-tools/path/linux-x86
           
-          # Mengatasi nproc, sed, clang hilang
+          # Kunci nproc, tr, sed, clang agar dieksekusi dari OS Ubuntu
           sudo ln -sf /usr/bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
+          sudo ln -sf /usr/bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
+          sudo ln -sf /bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
           
-          # Mengatasi 'sys/types.h' not found tanpa perlu mendownload AOSP
-          # Menyambungkan sysroot palsu Google LANGSUNG ke jantung OS Ubuntu
+          # 4. SYSROOT LOOPBACK (Bypass sys/types.h not found)
+          mkdir -p build/build-tools/sysroot/usr
+          mkdir -p prebuilts/build-tools/sysroot/usr
+          
+          sudo ln -sf /usr/include build/build-tools/sysroot/usr/include
+          sudo ln -sf /usr/lib build/build-tools/sysroot/usr/lib
           sudo ln -sf /usr/include prebuilts/build-tools/sysroot/usr/include
           sudo ln -sf /usr/lib prebuilts/build-tools/sysroot/usr/lib
           
-          # 4. TRIK NDK DUMMY
+          # 5. TRIK NDK DUMMY
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p prebuilts/ndk
           mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
           
-          # 5. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI
+          # 6. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
@@ -141,12 +146,11 @@ jobs:
           export OUT_DIR=$GITHUB_WORKSPACE/out
           mkdir -p $OUT_DIR
           
-          # Memaksa kompiler agar 100% menggunakan native clang
           export LLVM=1
           export CC=clang
           export HOSTCC=clang
           
-          echo "Memulai kompilasi kernel Super Cepat (Native Clang)..."
+          echo "Memulai kompilasi kernel Super Cepat..."
           chmod +x build/build.sh
           ./build/build.sh
 
