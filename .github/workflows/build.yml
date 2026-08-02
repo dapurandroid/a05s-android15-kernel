@@ -78,14 +78,22 @@ jobs:
             fi
           done
 
-      - name: Enable KSU & SuSFS Configurations
+      - name: Enable KSU, SuSFS, & Disable Samsung DEFEX
         run: |
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
+          echo "Menggunakan Config File: $DEFCONFIG_FILE"
           
+          # 1. BONGKAR KEAMANAN SAMSUNG (Mencegah Bootloop KernelSU)
+          echo "Mematikan Samsung DEFEX & Knox Security..."
+          sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          
+          # 2. Bersihkan konfigurasi KSU lama (jika ada)
           sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG_FILE 2>/dev/null || true
           
+          # 3. Injeksi KSU & SuSFS
           echo "CONFIG_KSU=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> $DEFCONFIG_FILE
@@ -109,7 +117,7 @@ jobs:
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (Elegant Hermetic Fix)
+      - name: Compile Kernel via Google Build System (Hermetic Sysroot Fix)
         run: |
           sudo apt-get install dos2unix -y
           find . -type f -name "*.sh" -exec dos2unix {} +
@@ -127,16 +135,19 @@ jobs:
           chmod +x build/gettop.sh
           sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
           
-          # --- 2. SOLUSI ELEGAN: THE HERMETIC TRAP (Bypass PATH Nuking) ---
-          # Daripada melawan variabel PATH, kita isi folder sandbox GKI dengan 
-          # symlink langsung ke coreutils bawaan Ubuntu.
-          echo "Menyuntikkan host binaries ke dalam sandbox GKI..."
+          # --- 2. SOLUSI ELEGAN: THE HERMETIC TRAP (Bypass PATH & Sysroot Nuking) ---
+          echo "Menyuntikkan host binaries & sysroot ke dalam sandbox GKI..."
           mkdir -p prebuilts/build-tools/path/linux-x86
           mkdir -p build/build-tools/path/linux-x86
           sudo ln -sf /usr/bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /usr/bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
+          
+          # [INI KUNCI UNTUK ERROR sys/types.h]
+          # Menyambungkan Sysroot GKI ke Root OS Ubuntu agar kompiler menemukan header Linux
+          mkdir -p build/build-tools
+          sudo ln -sf / build/build-tools/sysroot
           
           # --- 3. TRIK NDK Dummy ---
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
