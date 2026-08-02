@@ -102,44 +102,59 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
 
-      - name: Compile Kernel via Google Build System (Custom Root Wrapper)
+      - name: Prepare LKM & Blacklist sec.ko
+        run: |
+          cd $GITHUB_WORKSPACE
+          echo "Mematikan kompilasi modul sec.ko (Samsung Security)..."
+          
+          # Menghapus referensi sec_common dari Makefiles vendor agar tidak ikut dikompilasi
+          find vendor/qcom/opensource -name "Makefile" -type f -exec sed -i '/sec_common/d' {} + || true
+          find vendor/qcom/opensource -name "Kconfig" -type f -exec sed -i 's/source "vendor\/qcom\/opensource\/sec_common\/Kconfig"//g' {} + || true
+          
+          # Membuat file modules.blocklist sebagai jaring pengaman ekstra untuk Loadable Kernel Modules (LKM)
+          mkdir -p kernel_platform/vendor/qcom/opensource/modules
+          echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
+          echo "Modul sec.ko berhasil dimasukkan ke daftar hitam!"
+
+      - name: Compile Kernel via Google Build System (Path Harmony Fix)
         run: |
           # 1. Normalisasi format baris
           sudo apt-get install dos2unix -y
           find . -type f -name "*.sh" -exec dos2unix {} +
           
-          # 2. TETAP DI ROOT WORKSPACE (Kunci utama dari metode ini)
+          # 2. Tetap di Root Workspace
           cd $GITHUB_WORKSPACE
+          
+          # 3. SOLUSI MUTLAK UNTUK BARIS 3
+          # Membuat symlink msm-kernel di root agar baris 3 tidak error saat memanggilnya
+          ln -sf kernel_platform/msm-kernel msm-kernel
           
           echo "Merakit Custom Root Wrapper..."
           cat << 'EOF' > build_a05s_custom.sh
           #!/bin/bash
           
-          # 3. Kunci direktori mutlak dari Root
+          # Kunci direktori mutlak dari Root
           export ROOT_DIR=$PWD
           export ANDROID_BUILD_TOP=$PWD
           export OUT_DIR=$ROOT_DIR/out
           
           mkdir -p $OUT_DIR/target/product/a05s
-          
-          # Bypass folder NDK jika rilis vendor mencarinya
           mkdir -p prebuilts/ndk
           
-          # 4. Bypass prompt interaktif (Y/N) bawaan vendor
+          # Bypass GKI & Vendor Check
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
           
-          # 5. Ekspor target kompilasi
+          # Ekspor target kompilasi
           export TARGET_PRODUCT=gki
           export CHIPSET_NAME=sm6225
           export BUILD_CONFIG=kernel_platform/msm-kernel/build.config.msm.m269.sec
           
-          echo "Mengeksekusi GKI Build System dari Root..."
-          # Eksekusi memanggil ke dalam, bukan dari dalam
-          ./kernel_platform/build/build.sh
+          echo "Mengeksekusi GKI Build System..."
+          bash ./kernel_platform/build/build.sh
           EOF
           
-          # 6. Beri akses dan jalankan
+          # 4. Beri akses dan eksekusi
           chmod +x build_a05s_custom.sh
           ./build_a05s_custom.sh
           
@@ -147,7 +162,11 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           mkdir -p output
-          find . -name "Image" -o -name "Image.gz" -o -name "*.ko" | xargs -I {} cp {} output/ 2>/dev/null || true
+          
+          # Menyalin Image dan semua modul .ko KECUALI sec.ko jika masih lolos
+          echo "Mengemas kernel dan modul LKM..."
+          find . -name "Image" -o -name "Image.gz" -o -name "*.ko" | grep -v "sec.ko" | xargs -I {} cp {} output/ 2>/dev/null || true
+          
           cd output
           zip -r $GITHUB_WORKSPACE/kernel_susfs_a05s.zip *
 
