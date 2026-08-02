@@ -9,7 +9,9 @@ jobs:
     steps:
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
-
+        with:
+          submodules: 'recursive'
+          
       - name: Maximize Build Space
         uses: easimon/maximize-build-space@master
         with:
@@ -43,20 +45,32 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           
-          # Cari folder kernel utama secara dinamis yang berisi folder drivers/ dan fs/
-          KERNEL_DIR=$(find kernel_platform/ -type d -name "drivers" -exec dirname {} \; | head -n 1)
-          echo "Kernel Directory ditemukan di: $KERNEL_DIR"
+          # Deteksi cerdas direktori root kernel Linux (GKI Android 15)
+          echo "Mencari direktori kernel GKI..."
+          if [ -d "kernel_platform/common/drivers" ]; then
+            KERNEL_DIR="kernel_platform/common"
+          elif [ -d "kernel_platform/msm-kernel/drivers" ]; then
+            KERNEL_DIR="kernel_platform/msm-kernel"
+          else
+            echo "[ERROR] Folder drivers/ tidak ditemukan di common maupun msm-kernel!"
+            echo "Menampilkan isi root kernel_platform untuk debugging:"
+            ls -la kernel_platform/
+            exit 1
+          fi
+          
+          echo "Kernel Directory valid ditemukan di: $KERNEL_DIR"
           echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
           
           # Masuk ke folder kernel utama
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           
-          # Inject KernelSU Next (Gunakan curl dan eksekusi di lokasi kernel)
+          # Inject KernelSU Next
+          echo "Menyuntikkan KernelSU Next..."
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
           
-          # Clone SuSFS khusus Kernel 5.15
+          # Clone SuSFS (Gunakan branch main universal, karena Android 15 bisa saja menggunakan kernel 6.1)
           cd $GITHUB_WORKSPACE
-          git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android14-5.15 susfs
+          git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git susfs
           
           # Apply Patch to KernelSU Next
           cp susfs/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $KERNEL_DIR/KernelSU-Next/
@@ -65,11 +79,17 @@ jobs:
           
           # Apply Patch to Kernel VFS/FS
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
-          cp $GITHUB_WORKSPACE/susfs/kernel_patches/50_add_susfs_in_kernel-5.10.patch ./ 2>/dev/null || cp $GITHUB_WORKSPACE/susfs/kernel_patches/*.patch ./ 2>/dev/null || true
+          cp $GITHUB_WORKSPACE/susfs/kernel_patches/50_add_susfs_in_kernel-*.patch ./ 2>/dev/null || true
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/fs/* ./fs/ 2>/dev/null || true
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/include/linux/* ./include/linux/ 2>/dev/null || true
           
-          patch -p1 < 50_add_susfs_in_kernel-5.10.patch || true
+          # Terapkan patch kernel VFS secara dinamis (5.15 atau 6.1)
+          for patchfile in 50_add_susfs_in_kernel-*.patch; do
+            if [ -f "$patchfile" ]; then
+              echo "Menerapkan patch: $patchfile"
+              patch -p1 < "$patchfile" || true
+            fi
+          done
           
       - name: Enable KSU & SuSFS Configurations
         run: |
