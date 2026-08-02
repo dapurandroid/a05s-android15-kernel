@@ -104,38 +104,41 @@ jobs:
 
       - name: Compile Kernel via Google Build System (Fixed Path)
         run: |
-          # 1. Konversi format baris untuk keamanan
+          # 1. Konversi format baris untuk keamanan dari sistem lokal
           sudo apt-get install dos2unix -y
           find . -type f -name "*.sh" -exec dos2unix {} +
           
-          # 2. Tetap di direktori utama (Root Workspace)
+          # 2. Kembali ke Root Workspace murni
           cd $GITHUB_WORKSPACE
           
-          # 3. Beri hak akses eksekusi pada script bawaan Samsung di root
-          chmod +x build_kernel_GKI.sh
+          # 3. Buat dummy directory agar validasi config Samsung tidak panik
+          echo "Membuat struktur direktori dummy untuk bypass AOSP check..."
+          mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
+          mkdir -p $GITHUB_WORKSPACE/device/qcom/gki-kernel
+          mkdir -p $GITHUB_WORKSPACE/out/target/product/a05s
           
-          echo "Mencoba menjalankan build_kernel_GKI.sh bawaan Samsung..."
-          ./build_kernel_GKI.sh || {
-            echo "[WARNING] Script bawaan gagal atau butuh argumen tambahan."
-            echo "Menggunakan metode fallback build.sh standar Google..."
-            
-            # Masuk ke kernel_platform untuk build standar
-            cd $GITHUB_WORKSPACE/kernel_platform
-            chmod +x build/build.sh
-            
-            # Ekspor variabel environment wajib
-            export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
-            export ANDROID_BUILD_TOP=$GITHUB_WORKSPACE
-            export BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec
-            
-            export CHIPSET_NAME=sm6225
-            export TARGET_PRODUCT=gki
-            
-            export OUT_DIR=${ANDROID_BUILD_TOP}/out/msm-kernel-${CHIPSET_NAME}-${TARGET_PRODUCT}
-            export ANDROID_PRODUCT_OUT=${ANDROID_BUILD_TOP}/out/target/product/a05s
-            
-            BUILD_CONFIG=$BUILD_CONFIG ./build/build.sh
-          }
+          # 4. Set ROOT_DIR ke Workspace Induk untuk mencegah duplikasi path
+          export ROOT_DIR=$GITHUB_WORKSPACE
+          export ANDROID_BUILD_TOP=$GITHUB_WORKSPACE
+          
+          # 5. Ekspor parameter build mutlak
+          # Perhatikan path BUILD_CONFIG sekarang mencakup kernel_platform/ di depannya
+          export BUILD_CONFIG=kernel_platform/msm-kernel/build.config.msm.m269.sec
+          
+          export CHIPSET_NAME=sm6225
+          export TARGET_PRODUCT=gki
+          export OUT_DIR=${ANDROID_BUILD_TOP}/out/msm-kernel-${CHIPSET_NAME}-${TARGET_PRODUCT}
+          export ANDROID_PRODUCT_OUT=${ANDROID_BUILD_TOP}/out/target/product/a05s
+          
+          # 6. Nonaktifkan interaksi prompt Y/N dari script sekunder
+          export DEBIAN_FRONTEND=noninteractive
+          export COPY_NEEDED=0
+          
+          echo "Memulai kompilasi native Google GKI..."
+          chmod +x kernel_platform/build/build.sh
+          
+          # Eksekusi langsung build.sh dari root directory
+          ./kernel_platform/build/build.sh
           
       - name: Package Output
         run: |
