@@ -106,15 +106,17 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           
-          # Buat direktori out secara manual agar mktemp tidak error
-          mkdir -p out/target/product/a05s
-          mkdir -p kernel_platform/prebuilts/ndk
+          # 1. Buat struktur folder NDK yang divalidasi oleh skrip _setup_env.sh Google
+          mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+          mkdir -p external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+          mkdir -p kernel_platform/prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           
-          # Atasi error NDK_TRIPLE dengan menyediakan path NDK tiruan atau symlink clang
-          if [ ! -d "kernel_platform/prebuilts/ndk/android-ndk-r26" ]; then
-            mkdir -p kernel_platform/prebuilts/ndk/android-ndk-r26
-            ln -sf /usr/bin/clang-17 kernel_platform/prebuilts/ndk/android-ndk-r26/clang || true
-          fi
+          # Buat symlink Clang agar terbaca sebagai compiler NDK
+          ln -sf /usr/bin/clang-17 prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/clang || true
+          ln -sf /usr/bin/clang-17 external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/clang || true
+          
+          # 2. Buat direktori out Samsung
+          mkdir -p out/target/product/a05s
           
           export BUILD_TARGET=a05s_eur_open
           export MODEL=$(echo ${BUILD_TARGET} | cut -d'_' -f1)
@@ -152,7 +154,8 @@ jobs:
           chmod +x build_kernel_GKI.sh
           chmod +x kernel_platform/build/android/prepare_vendor.sh 2>/dev/null || true
           
-          ./build_kernel_GKI.sh a05s_eur_open user sm6225
+          # Jalankan skrip dengan pipa 'echo y' untuk menjawab otomatis prompt 'gki wasn't an option! Continue?'
+          echo "y" | ./build_kernel_GKI.sh a05s_eur_open user sm6225
 
       - name: Package Output
         run: |
