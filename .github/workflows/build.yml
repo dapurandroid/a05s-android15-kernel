@@ -111,18 +111,26 @@ jobs:
           # 2. Kembali ke Root Workspace murni
           cd $GITHUB_WORKSPACE
           
-          # 3. Buat dummy directory agar validasi config Samsung tidak panik
-          echo "Membuat struktur direktori dummy untuk bypass AOSP check..."
+          # 3. SOLUSI CERDAS: MENGATASI INKONSISTENSI PATH SAMSUNG (SYMLINK HACK)
+          # Kita buat jembatan agar folder penting bisa dibaca dari root maupun dari dalam kernel_platform
+          echo "Membuat symlink untuk mengelabui konfigurasi path Samsung..."
+          ln -sf kernel_platform/msm-kernel msm-kernel
+          ln -sf kernel_platform/common common
+          ln -sf kernel_platform/build build
+          ln -sf kernel_platform/external external
+          ln -sf kernel_platform/vendor vendor 2>/dev/null || true
+          
+          # 4. Buat dummy directory untuk bypass AOSP check
+          echo "Membuat direktori palsu untuk bypass..."
           mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
           mkdir -p $GITHUB_WORKSPACE/device/qcom/gki-kernel
           mkdir -p $GITHUB_WORKSPACE/out/target/product/a05s
           
-          # 4. Set ROOT_DIR ke Workspace Induk untuk mencegah duplikasi path
+          # 5. Set ROOT_DIR ke Workspace Induk
           export ROOT_DIR=$GITHUB_WORKSPACE
           export ANDROID_BUILD_TOP=$GITHUB_WORKSPACE
           
-          # 5. Ekspor parameter build mutlak
-          # Perhatikan path BUILD_CONFIG sekarang mencakup kernel_platform/ di depannya
+          # 6. Ekspor parameter build mutlak
           export BUILD_CONFIG=kernel_platform/msm-kernel/build.config.msm.m269.sec
           
           export CHIPSET_NAME=sm6225
@@ -130,7 +138,7 @@ jobs:
           export OUT_DIR=${ANDROID_BUILD_TOP}/out/msm-kernel-${CHIPSET_NAME}-${TARGET_PRODUCT}
           export ANDROID_PRODUCT_OUT=${ANDROID_BUILD_TOP}/out/target/product/a05s
           
-          # 6. Nonaktifkan interaksi prompt Y/N dari script sekunder
+          # 7. Nonaktifkan prompt interaktif
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
           
