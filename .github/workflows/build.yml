@@ -102,23 +102,33 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
 
-      - name: Compile Kernel via Google Build System
+      - name: Compile Kernel via Google Build System (With Proper gettop.sh)
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 1. Pastikan struktur folder NDK terpenuhi
+          # 1. Buat file build/gettop.sh beserta fungsi internalnya agar skrip Google tidak error
+          mkdir -p build
+          cat << 'EOF' > build/gettop.sh
+          # Definisi fungsi gettop agar kompatibel dengan lingkungan GKI
+          gettop() {
+              echo "${ANDROID_BUILD_TOP:-$PWD}"
+          }
+          EOF
+          chmod +x build/gettop.sh
+          
+          # 2. Pastikan struktur folder NDK terpenuhi
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p ../prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p ../external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           
           ln -sf /usr/bin/clang-17 prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/clang || true
           
-          # 2. Patch build/build.sh agar coreutils aman
+          # 3. Patch build/build.sh agar PATH coreutils aman
           if [ -f "build/build.sh" ]; then
             sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' build/build.sh
           fi
 
-          # 3. KUNCI UTAMA: Definisikan ROOT_DIR secara mutlak agar gettop.sh terbaca benar
+          # 4. Set variabel environment secara mutlak
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export ANDROID_BUILD_TOP=$GITHUB_WORKSPACE
           export BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec
@@ -131,7 +141,7 @@ jobs:
           
           export PATH="$GITHUB_WORKSPACE/bin:$GITHUB_WORKSPACE/kernel_platform/prebuilts/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           
-          # 4. Jalankan build.sh dengan menyertakan argumen ROOT_DIR secara eksplisit
+          # 5. Jalankan build
           BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec ./build/build.sh
           
       - name: Package Output
