@@ -7,11 +7,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Kernel Source
-        uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
-          
+      # 1. MAKSIMALKAN RUANG DULU SEBELUM MENGUNDUH KODE
       - name: Maximize Build Space
         uses: easimon/maximize-build-space@master
         with:
@@ -21,6 +17,10 @@ jobs:
           remove-android: 'true'
           remove-haskell: 'true'
 
+      # 2. BARU UNDUH KODE KE HARDISK YANG SUDAH KOSONG DAN BESAR
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
@@ -28,7 +28,6 @@ jobs:
 
       - name: Setup Clang & Toolchain Paths
         run: |
-          # Buat direktori symlink untuk Clang agar dikenali oleh skrip build Samsung
           mkdir -p $GITHUB_WORKSPACE/bin
           mkdir -p $GITHUB_WORKSPACE/kernel_platform/prebuilts/bin
           mkdir -p $GITHUB_WORKSPACE/kernel_platform/prebuilts-master/bin
@@ -45,7 +44,6 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           
-          # Deteksi cerdas direktori root kernel Linux (GKI Android 15)
           echo "Mencari direktori kernel GKI..."
           if [ -d "kernel_platform/common/drivers" ]; then
             KERNEL_DIR="kernel_platform/common"
@@ -61,43 +59,36 @@ jobs:
           echo "Kernel Directory valid ditemukan di: $KERNEL_DIR"
           echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
           
-          # Masuk ke folder kernel utama
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           
-          # Inject KernelSU Next
           echo "Menyuntikkan KernelSU Next..."
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
           
-          # Clone SuSFS (Gunakan branch main universal, karena Android 15 bisa saja menggunakan kernel 6.1)
           cd $GITHUB_WORKSPACE
           git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git susfs
           
-          # Apply Patch to KernelSU Next
           cp susfs/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $KERNEL_DIR/KernelSU-Next/
           cd $KERNEL_DIR/KernelSU-Next
           patch -p1 < 10_enable_susfs_for_ksu.patch || true
           
-          # Apply Patch to Kernel VFS/FS
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           cp $GITHUB_WORKSPACE/susfs/kernel_patches/50_add_susfs_in_kernel-*.patch ./ 2>/dev/null || true
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/fs/* ./fs/ 2>/dev/null || true
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/include/linux/* ./include/linux/ 2>/dev/null || true
           
-          # Terapkan patch kernel VFS secara dinamis (5.15 atau 6.1)
           for patchfile in 50_add_susfs_in_kernel-*.patch; do
             if [ -f "$patchfile" ]; then
               echo "Menerapkan patch: $patchfile"
               patch -p1 < "$patchfile" || true
             fi
           done
-          
+
       - name: Enable KSU & SuSFS Configurations
         run: |
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
           echo "Menggunakan Config File: $DEFCONFIG_FILE"
           
-          # Pastikan konfigurasi SuSFS dan KSU aktif
           sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG_FILE 2>/dev/null || true
           
@@ -110,12 +101,11 @@ jobs:
           echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
-          
+
       - name: Compile Kernel via Samsung Official Script
         run: |
           cd $GITHUB_WORKSPACE
           
-          # Export Environment Variables Sesuai README.txt & build_kernel_GKI.sh Samsung
           export BUILD_TARGET=a05s_eur_open
           export MODEL=$(echo ${BUILD_TARGET} | cut -d'_' -f1)
           export PROJECT_NAME=${MODEL}
@@ -132,13 +122,12 @@ jobs:
           export OUT_DIR=${ANDROID_BUILD_TOP}/out/msm-kernel-${CHIPSET_NAME}-${TARGET_PRODUCT}
           export MODNAME=audio_dlkm
           
-          # Lcd & Audio Driver Export Symbols (Sesuai README.txt & build_kernel_GKI.sh)
           export KBUILD_EXTRA_SYMBOLS="${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mmrm-driver/Module.symvers \
               ${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mm-drivers/hw_fence/Module.symvers \
               ${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mm-drivers/sync_fence/Module.symvers \
               ${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mm-drivers/msm_ext_display/Module.symvers \
               ${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/securemsm-kernel/Module.symvers"
-
+          
           export KBUILD_EXT_MODULES="../vendor/qcom/opensource/mm-drivers/msm_ext_display \
             ../vendor/qcom/opensource/mm-drivers/sync_fence \
             ../vendor/qcom/opensource/mm-drivers/hw_fence \
@@ -148,14 +137,11 @@ jobs:
             ../vendor/qcom/opensource/audio-kernel \
             ../vendor/qcom/opensource/camera-kernel"
           
-          # Tambahkan Toolchain ke PATH
           export PATH="$GITHUB_WORKSPACE/bin:$GITHUB_WORKSPACE/kernel_platform/prebuilts/bin:$PATH"
           
-          # Beri Akses Eksekusi Skrip Build
           chmod +x build_kernel_GKI.sh
           chmod +x kernel_platform/build/android/prepare_vendor.sh 2>/dev/null || true
           
-          # Eksekusi skrip resmi Samsung
           ./build_kernel_GKI.sh a05s_eur_open user sm6225
 
       - name: Package Output
