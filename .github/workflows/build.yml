@@ -29,14 +29,16 @@ jobs:
           cd $GITHUB_WORKSPACE
           mkdir -p kernel_platform/prebuilts kernel_platform/prebuilts-master
           
-          echo "Mendownload Clang-r488900 dari tag Android 14 resmi..."
-          # Menggunakan tag android-14.0.0_r1 karena folder r488900 sudah dihapus dari branch main
-          wget -q -O clang.tar.gz "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/tags/android-14.0.0_r1/clang-r488900.tar.gz"
+          echo "Mendownload Clang r488900 dari GitHub Release Mirror..."
+          curl -sL "https://github.com/kalacloud/clang-r488900/archive/refs/heads/main.zip" -o clang.zip || wget "https://github.com/kalacloud/clang-r488900/archive/refs/heads/main.zip" -O clang.zip
           
           echo "Mengekstrak Clang..."
-          tar -C kernel_platform/prebuilts -xzf clang.tar.gz
-          tar -C kernel_platform/prebuilts-master -xzf clang.tar.gz
-          rm clang.tar.gz
+          unzip -q clang.zip
+          cp -r clang-r488900-main/* kernel_platform/prebuilts/
+          cp -r clang-r488900-main/* kernel_platform/prebuilts-master/
+          rm -rf clang.zip clang-r488900-main
+          
+          echo "Toolchain Clang berhasil terinstall sempurna!"
 
       - name: Inject KernelSU Next & SuSFS
         run: |
