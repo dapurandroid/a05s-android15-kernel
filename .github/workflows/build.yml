@@ -96,9 +96,15 @@ jobs:
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (AOSP Toolchain Method)
+      - name: Compile Kernel via Google Build System (AOSP Toolchain + NDK Dummy)
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
+          
+          # --- 0. KEMBALIKAN TRIK NDK DUMMY ---
+          echo "Membuat struktur NDK Dummy untuk bypass validasi..."
+          mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+          mkdir -p prebuilts/ndk
+          mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
           
           # 1. PENCEGAHAN TOTAL: SYMLINK SELURUH FOLDER BUILD KE ROOT
           sudo rm -rf /build 2>/dev/null || true
