@@ -104,21 +104,22 @@ jobs:
 
       - name: Compile Kernel via Samsung Official Script
         run: |
-          cd $GITHUB_WORKSPACE
+          # 1. Masuk ke dalam kernel_platform terlebih dahulu karena seluruh struktur GKI berpusat di sini
+          cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 1. Siapkan struktur folder NDK di berbagai tempat agar aman
+          # 2. Siapkan struktur folder NDK di dalam root dan kernel_platform
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-          mkdir -p external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-          mkdir -p kernel_platform/prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+          mkdir -p ../prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+          mkdir -p ../external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           
           ln -sf /usr/bin/clang-17 prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/clang || true
-          ln -sf /usr/bin/clang-17 external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/clang || true
+          ln -sf /usr/bin/clang-17 ../prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/clang || true
           
-          mkdir -p out/target/product/a05s
+          mkdir -p ../out/target/product/a05s
           
-          # 2. Patch file build.sh di dalam kernel_platform/build/ agar PATH aman
-          if [ -f "kernel_platform/build/build.sh" ]; then
-            sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' kernel_platform/build/build.sh
+          # 3. Patch build/build.sh agar PATH coreutils aman dari dalam kernel_platform
+          if [ -f "build/build.sh" ]; then
+            sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' build/build.sh
           fi
 
           export BUILD_TARGET=a05s_eur_open
@@ -143,24 +144,22 @@ jobs:
               ${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mm-drivers/msm_ext_display/Module.symvers \
               ${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/securemsm-kernel/Module.symvers"
           
-          export KBUILD_EXT_MODULES="../vendor/qcom/opensource/mm-drivers/msm_ext_display \
-            ../vendor/qcom/opensource/mm-drivers/sync_fence \
-            ../vendor/qcom/opensource/mm-drivers/hw_fence \
-            ../vendor/qcom/opensource/mmrm-driver \
-            ../vendor/qcom/opensource/securemsm-kernel \
-            ../vendor/qcom/opensource/display-drivers/msm \
-            ../vendor/qcom/opensource/audio-kernel \
-            ../vendor/qcom/opensource/camera-kernel"
+          export KBUILD_EXT_MODULES="vendor/qcom/opensource/mm-drivers/msm_ext_display \
+            vendor/qcom/opensource/mm-drivers/sync_fence \
+            vendor/qcom/opensource/mm-drivers/hw_fence \
+            vendor/qcom/opensource/mmrm-driver \
+            vendor/qcom/opensource/securemsm-kernel \
+            vendor/qcom/opensource/display-drivers/msm \
+            vendor/qcom/opensource/audio-kernel \
+            vendor/qcom/opensource/camera-kernel"
           
           export PATH="$GITHUB_WORKSPACE/bin:$GITHUB_WORKSPACE/kernel_platform/prebuilts/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           
-          # Berikan izin eksekusi dari root workspace
-          chmod +x build_kernel_GKI.sh
-          chmod +x kernel_platform/build/android/prepare_vendor.sh 2>/dev/null || true
+          chmod +x ../build_kernel_GKI.sh
+          chmod +x build/android/prepare_vendor.sh 2>/dev/null || true
           
-          # 3. KUNCI UTAMA: Tetap di root workspace, tetapi kita perbaiki jalur pemanggilan di dalam build_kernel_GKI.sh 
-          # atau langsung jalankan dari root tanpa pindah direktori agar skrip Samsung membaca path relatif dengan benar.
-          # Jika skrip Samsung memanggil ./kernel_platform/build/android/prepare_vendor.sh, maka kita harus berada di root.
+          # 4. Eksekusi skrip utama Samsung dari root workspace dengan memanggil path relatifnya
+          cd $GITHUB_WORKSPACE
           echo "y" | ./build_kernel_GKI.sh a05s_eur_open user sm6225
           
       - name: Package Output
