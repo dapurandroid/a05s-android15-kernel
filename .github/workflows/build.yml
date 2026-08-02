@@ -106,32 +106,13 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 1. Buat direktori /build di root sistem jika skrip Google mencarinya secara mutlak
-          sudo mkdir -p /build
-          sudo cp -f build/build_utils.sh /build/build_utils.sh 2>/dev/null || true
+          # 1. Konversi format baris dari Windows (CRLF) ke Linux (LF)
+          # Langkah ini wajib untuk mencegah error "no such file or directory" pada script bash
+          sudo apt-get install dos2unix -y
+          find . -type f -name "*.sh" -exec dos2unix {} +
           
-          # 2. Buat file gettop.sh beserta fungsi internalnya
-          mkdir -p build
-          cat << 'EOF' > build/gettop.sh
-          gettop() {
-              echo "${ANDROID_BUILD_TOP:-$PWD}"
-          }
-          EOF
-          chmod +x build/gettop.sh
-          
-          # 3. Pastikan struktur folder NDK terpenuhi
-          mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-          mkdir -p ../prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-          mkdir -p ../external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-          
-          ln -sf /usr/bin/clang-17 prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/clang || true
-          
-          # 4. Patch build/build.sh agar PATH coreutils aman
-          if [ -f "build/build.sh" ]; then
-            sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' build/build.sh
-          fi
-
-          # 5. Set variabel environment secara mutlak
+          # 2. Hapus hack manual (/build dan gettop.sh)
+          # Sistem build akan otomatis mengenali jalurnya selama ROOT_DIR diset dengan benar.
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export ANDROID_BUILD_TOP=$GITHUB_WORKSPACE
           export BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec
@@ -142,10 +123,12 @@ jobs:
           export OUT_DIR=${ANDROID_BUILD_TOP}/out/msm-kernel-${CHIPSET_NAME}-${TARGET_PRODUCT}
           export ANDROID_PRODUCT_OUT=${ANDROID_BUILD_TOP}/out/target/product/a05s
           
-          export PATH="$GITHUB_WORKSPACE/bin:$GITHUB_WORKSPACE/kernel_platform/prebuilts/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+          # 3. Prioritaskan script wrapper dari Samsung jika tersedia
+          # Berdasarkan image_1a4398.png, kita gunakan build_kernel_GKI.sh
+          # Jika gagal, fallback ke eksekusi build.sh standar
+          chmod +x build_kernel_GKI.sh build/build.sh
           
-          # 6. Jalankan build dengan ROOT_DIR diekspor secara eksplisit
-          BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec ./build/build.sh
+          bash build_kernel_GKI.sh || BUILD_CONFIG=$BUILD_CONFIG bash ./build/build.sh
           
       - name: Package Output
         run: |
