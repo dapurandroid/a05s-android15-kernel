@@ -7,7 +7,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1. MAKSIMALKAN RUANG DULU SEBELUM MENGUNDUH KODE
       - name: Maximize Build Space
         uses: easimon/maximize-build-space@master
         with:
@@ -17,47 +16,40 @@ jobs:
           remove-android: 'true'
           remove-haskell: 'true'
 
-      # 2. UNDUH KODE KE HARDISK
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libsqlite3-dev libgmp-dev libmpfr-dev libmpc-dev libglib2.0-dev libpixman-1-dev python3 liblz4-tool git ccache zip clang-17 lld-17 llvm-17
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libsqlite3-dev libgmp-dev libmpfr-dev libmpc-dev libglib2.0-dev libpixman-1-dev python3 liblz4-tool git ccache zip dos2unix
+          find . -type f -name "*.sh" -exec dos2unix {} +
 
-      - name: Setup Clang & Toolchain Paths
+      # --- PERUBAHAN KRUSIAL: MENGUNDUH AOSP CLANG ---
+      - name: Download AOSP Clang Toolchain (clang-r487747c)
         run: |
-          mkdir -p $GITHUB_WORKSPACE/bin
-          mkdir -p $GITHUB_WORKSPACE/kernel_platform/prebuilts/bin
-          mkdir -p $GITHUB_WORKSPACE/kernel_platform/prebuilts-master/bin
+          cd $GITHUB_WORKSPACE/kernel_platform
+          echo "Mengunduh Toolchain Clang AOSP resmi untuk kernel 5.15..."
+          mkdir -p prebuilts/clang/host/linux-x86
+          cd prebuilts/clang/host/linux-x86
+          # Mengkloning clang-r487747c (Clang 17 standar AOSP) secara spesifik (shallow clone)
+          git clone --depth=1 -b main https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang-r487747c
           
-          ln -sf /usr/bin/clang-17 $GITHUB_WORKSPACE/bin/clang
-          ln -sf /usr/bin/ld.lld-17 $GITHUB_WORKSPACE/bin/ld.lld
+          # Membuat symlink clang-r487747c ke clang-r487747 (karena rilis vendor kadang mencarinya tanpa 'c')
+          ln -sf clang-r487747c clang-r487747
           
-          ln -sf /usr/bin/clang-17 $GITHUB_WORKSPACE/kernel_platform/prebuilts/bin/clang
-          ln -sf /usr/bin/clang-17 $GITHUB_WORKSPACE/kernel_platform/prebuilts-master/bin/clang
-          
-          echo "Toolchain Clang 17 Native Berhasil Dikonfigurasi!"
+          # Membuat struktur GCC/Binutils (Dummy, karena LLVM akan menangani sisanya)
+          cd $GITHUB_WORKSPACE/kernel_platform
+          mkdir -p prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
+          mkdir -p prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9
 
       - name: Inject KernelSU Next & SuSFS
         run: |
           cd $GITHUB_WORKSPACE
-          
-          echo "Mencari direktori kernel GKI..."
-          if [ -d "kernel_platform/common/drivers" ]; then
-            KERNEL_DIR="kernel_platform/common"
-          elif [ -d "kernel_platform/msm-kernel/drivers" ]; then
-            KERNEL_DIR="kernel_platform/msm-kernel"
-          else
-            echo "[ERROR] Folder drivers/ tidak ditemukan!"
-            exit 1
-          fi
-          
+          KERNEL_DIR="kernel_platform/common"
           echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
           
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
-          echo "Menyuntikkan KernelSU Next..."
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
           
           cd $GITHUB_WORKSPACE
@@ -73,27 +65,19 @@ jobs:
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/include/linux/* ./include/linux/ 2>/dev/null || true
           
           for patchfile in 50_add_susfs_in_kernel-*.patch; do
-            if [ -f "$patchfile" ]; then
-              patch -p1 < "$patchfile" || true
-            fi
+            if [ -f "$patchfile" ]; then patch -p1 < "$patchfile" || true; fi
           done
 
       - name: Enable KSU, SuSFS, & Disable Samsung DEFEX
         run: |
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
-          echo "Menggunakan Config File: $DEFCONFIG_FILE"
           
-          # 1. BONGKAR KEAMANAN SAMSUNG (Mencegah Bootloop KernelSU)
-          echo "Mematikan Samsung DEFEX & Knox Security..."
           sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          
-          # 2. Bersihkan konfigurasi KSU lama (jika ada)
           sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG_FILE 2>/dev/null || true
           
-          # 3. Injeksi KSU & SuSFS
           echo "CONFIG_KSU=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> $DEFCONFIG_FILE
@@ -107,24 +91,16 @@ jobs:
       - name: Prepare LKM & Blacklist sec.ko
         run: |
           cd $GITHUB_WORKSPACE
-          echo "Mematikan kompilasi modul sec.ko (Samsung Security)..."
-          
-          # Menghapus referensi sec_common dari Makefiles vendor
           find vendor/qcom/opensource -name "Makefile" -type f -exec sed -i '/sec_common/d' {} + || true
           find vendor/qcom/opensource -name "Kconfig" -type f -exec sed -i 's/source "vendor\/qcom\/opensource\/sec_common\/Kconfig"//g' {} + || true
-          
-          # Membuat file modules.blocklist sebagai jaring pengaman ekstra
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (Physical Header Nuke)
+      - name: Compile Kernel via Google Build System (AOSP Toolchain Method)
         run: |
-          sudo apt-get install dos2unix -y
-          find . -type f -name "*.sh" -exec dos2unix {} +
-          
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # --- 1. PENCEGAHAN TOTAL: SYMLINK SELURUH FOLDER BUILD KE ROOT ---
+          # 1. PENCEGAHAN TOTAL: SYMLINK SELURUH FOLDER BUILD KE ROOT
           sudo rm -rf /build 2>/dev/null || true
           mkdir -p build
           cat << 'EOF' > build/gettop.sh
@@ -135,44 +111,18 @@ jobs:
           chmod +x build/gettop.sh
           sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
           
-          # --- 2. THE HERMETIC TRAP (Bypass PATH Nuking) ---
-          mkdir -p prebuilts/build-tools/path/linux-x86
-          mkdir -p build/build-tools/path/linux-x86
-          sudo ln -sf /usr/bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
-          sudo ln -sf /bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
-          sudo ln -sf /usr/bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
-          sudo ln -sf /bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
-          
-          # --- 3. [SOLUSI NUKLIR] PHYSICAL HEADER CLONE ---
-          echo "Menyalin paksa header Ubuntu ke dalam sysroot sandbox GKI..."
-          # Membuat struktur folder sysroot yang diminta Clang
-          mkdir -p build/build-tools/sysroot/usr/include
-          
-          # Menyalin seluruh folder include standar C/C++ dari OS host ke dalam sandbox
-          sudo cp -r /usr/include/* build/build-tools/sysroot/usr/include/ 2>/dev/null || true
-          
-          # Menyalin header spesifik arsitektur x86_64 yang berisi sys/types.h
-          sudo cp -r /usr/include/x86_64-linux-gnu/* build/build-tools/sysroot/usr/include/ 2>/dev/null || true
-          
-          # --- 4. TRIK NDK Dummy ---
-          mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-          mkdir -p prebuilts/ndk
-          mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
-          
-          # --- 5. PHYSICAL CLONE (Fix Pathing Direktori Ganda) ---
+          # 2. PHYSICAL CLONE (Fix Pathing Direktori Ganda)
           cp msm-kernel/build.config.* common/ 2>/dev/null || true
           cp common/build.config.* msm-kernel/ 2>/dev/null || true
-          
           mkdir -p kernel_platform
           cp -a common kernel_platform/ 2>/dev/null || true
           cp -a msm-kernel kernel_platform/ 2>/dev/null || true
-          
           find . -name "build.config.msm.common" -exec cp {} kernel_platform/common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} kernel_platform/common/ \; 2>/dev/null || true
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # --- 6. KUNCI ENVIRONMENT VARIABLES ---
+          # 3. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
@@ -180,23 +130,18 @@ jobs:
           export BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec
           export CHIPSET_NAME=sm6225
           export TARGET_PRODUCT=gki
-          
           export OUT_DIR=$GITHUB_WORKSPACE/out
           mkdir -p $OUT_DIR
           
-          echo "Memulai kompilasi kernel Clang..."
+          echo "Memulai kompilasi kernel dengan AOSP Clang..."
           chmod +x build/build.sh
           ./build/build.sh
-          
+
       - name: Package Output
         run: |
           cd $GITHUB_WORKSPACE
           mkdir -p output
-          
-          # Menyalin Image dan modul .ko KECUALI sec.ko
-          echo "Mengemas kernel dan modul LKM..."
           find . -name "Image" -o -name "Image.gz" -o -name "*.ko" | grep -v "sec.ko" | xargs -I {} cp {} output/ 2>/dev/null || true
-          
           cd output
           zip -r $GITHUB_WORKSPACE/kernel_susfs_a05s.zip *
 
