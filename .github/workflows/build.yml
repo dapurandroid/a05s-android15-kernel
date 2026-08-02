@@ -109,7 +109,7 @@ jobs:
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (Root Symlink Fix)
+      - name: Compile Kernel via Google Build System (Elegant Hermetic Fix)
         run: |
           sudo apt-get install dos2unix -y
           find . -type f -name "*.sh" -exec dos2unix {} +
@@ -117,11 +117,7 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_platform
           
           # --- 1. PENCEGAHAN TOTAL: SYMLINK SELURUH FOLDER BUILD KE ROOT ---
-          echo "Membuat symlink seluruh folder build lokal ke /build OS..."
-          # Pastikan /build kosong sebelum ditautkan
           sudo rm -rf /build 2>/dev/null || true
-          
-          # Buat file gettop.sh buatan Anda di folder lokal
           mkdir -p build
           cat << 'EOF' > build/gettop.sh
           gettop() {
@@ -129,23 +125,25 @@ jobs:
           }
           EOF
           chmod +x build/gettop.sh
-          
-          # Ini kunci pamungkasnya: menautkan seluruh folder
           sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
           
-          # --- 2. KEMBALIKAN PATH FIX ---
-          echo "Memperbaiki sistem PATH agar coreutils terbaca..."
-          sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' build/build.sh
-          export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+          # --- 2. SOLUSI ELEGAN: THE HERMETIC TRAP (Bypass PATH Nuking) ---
+          # Daripada melawan variabel PATH, kita isi folder sandbox GKI dengan 
+          # symlink langsung ke coreutils bawaan Ubuntu.
+          echo "Menyuntikkan host binaries ke dalam sandbox GKI..."
+          mkdir -p prebuilts/build-tools/path/linux-x86
+          mkdir -p build/build-tools/path/linux-x86
+          sudo ln -sf /usr/bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
+          sudo ln -sf /bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
+          sudo ln -sf /usr/bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
+          sudo ln -sf /bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
           
           # --- 3. TRIK NDK Dummy ---
-          echo "Membuat struktur NDK Dummy..."
-          mkdir -p $GITHUB_WORKSPACE/kernel_platform/prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-          mkdir -p $GITHUB_WORKSPACE/kernel_platform/prebuilts/ndk
+          mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+          mkdir -p prebuilts/ndk
           mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
           
           # --- 4. PHYSICAL CLONE (Fix Pathing Direktori Ganda) ---
-          echo "Menyebar file konfigurasi ke seluruh folder target..."
           cp msm-kernel/build.config.* common/ 2>/dev/null || true
           cp common/build.config.* msm-kernel/ 2>/dev/null || true
           
@@ -159,7 +157,6 @@ jobs:
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
           # --- 5. KUNCI ENVIRONMENT VARIABLES ---
-          # Memastikan ROOT_DIR diisi dengan paksa sejak awal
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
