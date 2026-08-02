@@ -26,13 +26,13 @@ jobs:
 
       - name: Setup AOSP Clang Toolchain
         run: |
-          cd $GITHUB_WORKSPACE/kernel_platform
-          mkdir -p prebuilts prebuilts-master
+          cd $GITHUB_WORKSPACE
+          mkdir -p kernel_platform/prebuilts kernel_platform/prebuilts-master
           
           # Download Clang AOSP
           wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r488900.tar.gz
-          tar -C prebuilts -xzf clang-r488900.tar.gz
-          tar -C prebuilts-master -xzf clang-r488900.tar.gz
+          tar -C kernel_platform/prebuilts -xzf clang-r488900.tar.gz
+          tar -C kernel_platform/prebuilts-master -xzf clang-r488900.tar.gz
 
       - name: Inject KernelSU Next & SuSFS
         run: |
