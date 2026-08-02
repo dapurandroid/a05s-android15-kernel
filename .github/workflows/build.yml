@@ -110,19 +110,23 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # 3. THE TRUE HERMETIC TRAP (Target Absolut ke build/kernel/build-tools)
-          echo "Menyuntikkan utilitas ke TRUE sandbox GKI Samsung..."
+          # 3 & 4. THE TRUE HERMETIC TRAP & SYSROOT MERGE (Presisi Eksekusi)
+          echo "Membersihkan rintangan dan merakit sysroot fisik..."
           TRUE_SANDBOX="build/kernel/build-tools"
+          
+          # HANCURKAN file/symlink lama yang memblokir pembuatan folder
+          sudo rm -rf $TRUE_SANDBOX/sysroot 2>/dev/null || true
+          
+          # Sekarang aman untuk membuat strukturnya
           mkdir -p $TRUE_SANDBOX/path/linux-x86
-          
-          sudo ln -sf /usr/bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
-          sudo ln -sf /bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
-          
-          # 4. TRUE SYSROOT MERGE (Solusi Absolut Error sys/types.h)
-          echo "Merakit sysroot fisik di lokasi yang sebenarnya..."
           mkdir -p $TRUE_SANDBOX/sysroot/usr/include
           mkdir -p $TRUE_SANDBOX/sysroot/usr/lib
           
+          # Injeksi Utilitas
+          sudo ln -sf /usr/bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
+          sudo ln -sf /bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
+          
+          # Injeksi Sysroot Fisik
           sudo cp -rL /usr/include/* $TRUE_SANDBOX/sysroot/usr/include/ 2>/dev/null || true
           sudo cp -rL /usr/include/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/include/ 2>/dev/null || true
           sudo cp -rL /usr/lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/lib/ 2>/dev/null || true
