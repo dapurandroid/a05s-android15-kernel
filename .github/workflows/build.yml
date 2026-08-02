@@ -106,7 +106,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           
-          # 1. Buat struktur folder NDK
+          # 1. Buat struktur folder NDK di berbagai tempat agar aman
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p kernel_platform/prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
@@ -116,11 +116,9 @@ jobs:
           
           mkdir -p out/target/product/a05s
           
-          # 2. SOLUSI PAMUNGGKAS: Patch build/build.sh secara otomatis agar PATH sistem selalu terbaca
-          BUILD_SH_PATH=$(find . -name "build.sh" | grep -E "kernel_platform/build/build.sh|build/build.sh" | head -n 1)
-          if [ -f "$BUILD_SH_PATH" ]; then
-            echo "Memodifikasi file $BUILD_SH_PATH untuk mengamankan PATH coreutils..."
-            sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' "$BUILD_SH_PATH"
+          # 2. Patch build.sh di dalam kernel_platform/build/
+          if [ -f "kernel_platform/build/build.sh" ]; then
+            sed -i '2i export PATH="/usr/bin:/bin:/usr/sbin:/sbin:$PATH"' kernel_platform/build/build.sh
           fi
 
           export BUILD_TARGET=a05s_eur_open
@@ -159,6 +157,9 @@ jobs:
           chmod +x build_kernel_GKI.sh
           chmod +x kernel_platform/build/android/prepare_vendor.sh 2>/dev/null || true
           
+          # 3. KUNCI UTAMA: Jalankan skrip dari dalam folder kernel_platform agar path build.sh terbaca benar, 
+          # atau biarkan skrip Samsung mengeksekusi kernel_platform/build/build.sh dengan benar.
+          # Mari kita arahkan direktori eksekusi skrip utama Samsung:
           echo "y" | ./build_kernel_GKI.sh a05s_eur_open user sm6225
 
       - name: Package Output
