@@ -25,23 +25,30 @@ jobs:
           sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libsqlite3-dev libgmp-dev libmpfr-dev libmpc-dev libglib2.0-dev libpixman-1-dev python3 liblz4-tool git ccache zip dos2unix
           find . -type f -name "*.sh" -exec dos2unix {} +
 
-      # --- PERUBAHAN KRUSIAL: MENGUNDUH AOSP CLANG ---
-      - name: Download AOSP Clang Toolchain (clang-r487747c)
+      - name: Download AOSP Toolchains & Build Tools
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
-          echo "Mengunduh Toolchain Clang AOSP resmi untuk kernel 5.15..."
+          
+          # Mengunduh Clang yang benar
           mkdir -p prebuilts/clang/host/linux-x86
           cd prebuilts/clang/host/linux-x86
-          # Mengkloning clang-r487747c (Clang 17 standar AOSP) secara spesifik (shallow clone)
           git clone --depth=1 -b main https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang-r487747c
-          
-          # Membuat symlink clang-r487747c ke clang-r487747 (karena rilis vendor kadang mencarinya tanpa 'c')
           ln -sf clang-r487747c clang-r487747
-          
-          # Membuat struktur GCC/Binutils (Dummy, karena LLVM akan menangani sisanya)
           cd $GITHUB_WORKSPACE/kernel_platform
+          
+          # MENGUNDUH BUILD TOOLS & SYSROOT AOSP YANG HILANG
+          # Ini adalah kunci untuk menyelesaikan error "sys/types.h" pada HOSTCC
+          mkdir -p prebuilts/build-tools
+          cd prebuilts/build-tools
+          git clone --depth=1 -b main https://android.googlesource.com/platform/prebuilts/build-tools .
+          cd $GITHUB_WORKSPACE/kernel_platform
+          
+          # Dummy NDK & GCC
           mkdir -p prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
           mkdir -p prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9
+          mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+          mkdir -p prebuilts/ndk
+          mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
 
       - name: Inject KernelSU Next & SuSFS
         run: |
@@ -96,28 +103,11 @@ jobs:
           mkdir -p kernel_platform/vendor/qcom/opensource/modules
           echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
 
-      - name: Compile Kernel via Google Build System (The Ultimate Trap)
+      - name: Compile Kernel via Google Build System (Clean AOSP Toolchain)
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 1. THE HERMETIC TRAP (Bypass PATH Nuking)
-          # Alih-alih mengedit PATH, kita jejalkan utilitas OS langsung ke dalam folder sandbox.
-          echo "Menyuntikkan host binaries Ubuntu ke dalam sandbox GKI..."
-          mkdir -p prebuilts/build-tools/path/linux-x86
-          mkdir -p build/build-tools/path/linux-x86
-          sudo ln -sf /usr/bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
-          sudo ln -sf /bin/* prebuilts/build-tools/path/linux-x86/ 2>/dev/null || true
-          sudo ln -sf /usr/bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
-          sudo ln -sf /bin/* build/build-tools/path/linux-x86/ 2>/dev/null || true
-          
-          # 2. TRIK NDK DUMMY (Mencegah error NDK_TRIPLE)
-          echo "Membuat struktur NDK Dummy..."
-          mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-          mkdir -p prebuilts/ndk
-          mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
-          
-          # 3. ROOT SYMLINK BUILD (Mencegah error gettop.sh / absolute path)
-          echo "Mentautkan folder build lokal ke root OS..."
+          # Root Symlink Build
           sudo rm -rf /build 2>/dev/null || true
           mkdir -p build
           cat << 'EOF' > build/gettop.sh
@@ -128,21 +118,18 @@ jobs:
           chmod +x build/gettop.sh
           sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
           
-          # 4. PHYSICAL CLONE (Mencegah error folder ganda kernel_platform/kernel_platform/)
-          echo "Menduplikasi fisik folder konfigurasi..."
+          # Fix Pathing Direktori Ganda
           cp msm-kernel/build.config.* common/ 2>/dev/null || true
           cp common/build.config.* msm-kernel/ 2>/dev/null || true
-          
           mkdir -p kernel_platform
           cp -a common kernel_platform/ 2>/dev/null || true
           cp -a msm-kernel kernel_platform/ 2>/dev/null || true
-          
           find . -name "build.config.msm.common" -exec cp {} kernel_platform/common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} kernel_platform/common/ \; 2>/dev/null || true
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # 5. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI
+          # Environment Variables
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
@@ -153,10 +140,10 @@ jobs:
           export OUT_DIR=$GITHUB_WORKSPACE/out
           mkdir -p $OUT_DIR
           
-          echo "Memulai kompilasi kernel dengan AOSP Clang..."
+          echo "Memulai kompilasi kernel..."
           chmod +x build/build.sh
           ./build/build.sh
-          
+
       - name: Package Output
         run: |
           cd $GITHUB_WORKSPACE
