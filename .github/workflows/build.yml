@@ -44,7 +44,7 @@ jobs:
           sudo ln -sf /usr/bin/llvm-objdump-17 /usr/bin/llvm-objdump
           sudo ln -sf /usr/bin/llvm-objdump-17 /bin/llvm-objdump
 
-      - name: Inject KernelSU Next & SuSFS
+      - name: Inject KernelSU Next & SuSFS (Targeted Version)
         run: |
           cd $GITHUB_WORKSPACE
           KERNEL_DIR="kernel_platform/common"
@@ -61,13 +61,15 @@ jobs:
           patch -p1 < 10_enable_susfs_for_ksu.patch || true
           
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
-          cp $GITHUB_WORKSPACE/susfs/kernel_patches/50_add_susfs_in_kernel-*.patch ./ 2>/dev/null || true
+          
+          # HANYA MENGAMBIL PATCH KERNEL 5.10+ (Cocok untuk GKI 5.15)
+          # Mengabaikan patch lawas untuk mencegah error "redefinition" dan "mmap_sem"
+          cp $GITHUB_WORKSPACE/susfs/kernel_patches/50_add_susfs_in_kernel-5.10+.patch ./ 2>/dev/null || true
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/fs/* ./fs/ 2>/dev/null || true
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/include/linux/* ./include/linux/ 2>/dev/null || true
           
-          for patchfile in 50_add_susfs_in_kernel-*.patch; do
-            if [ -f "$patchfile" ]; then patch -p1 < "$patchfile" || true; fi
-          done
+          echo "Menerapkan SuSFS untuk Kernel Modern..."
+          patch -p1 < 50_add_susfs_in_kernel-5.10+.patch || true
 
       - name: Enable KSU, SuSFS, & Disable Samsung DEFEX
         run: |
