@@ -106,7 +106,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           
-          # 1. Siapkan struktur folder NDK di dalam root dan kernel_platform
+          # 1. Siapkan struktur folder NDK di berbagai tempat agar aman
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p external/prebuilt_ndk/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p kernel_platform/prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
@@ -154,12 +154,14 @@ jobs:
           
           export PATH="$GITHUB_WORKSPACE/bin:$GITHUB_WORKSPACE/kernel_platform/prebuilts/bin:/usr/bin:/bin:/usr/sbin:/sbin"
           
+          # Berikan izin eksekusi dari root workspace
           chmod +x build_kernel_GKI.sh
           chmod +x kernel_platform/build/android/prepare_vendor.sh 2>/dev/null || true
           
-          # 3. KUNCI UTAMA: Masuk ke dalam kernel_platform sebelum menjalankan skrip Samsung
-          cd kernel_platform
-          echo "y" | ../build_kernel_GKI.sh a05s_eur_open user sm6225
+          # 3. KUNCI UTAMA: Tetap di root workspace, tetapi kita perbaiki jalur pemanggilan di dalam build_kernel_GKI.sh 
+          # atau langsung jalankan dari root tanpa pindah direktori agar skrip Samsung membaca path relatif dengan benar.
+          # Jika skrip Samsung memanggil ./kernel_platform/build/android/prepare_vendor.sh, maka kita harus berada di root.
+          echo "y" | ./build_kernel_GKI.sh a05s_eur_open user sm6225
           
       - name: Package Output
         run: |
