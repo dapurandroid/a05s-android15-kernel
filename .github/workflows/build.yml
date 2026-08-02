@@ -29,10 +29,14 @@ jobs:
           cd $GITHUB_WORKSPACE
           mkdir -p kernel_platform/prebuilts kernel_platform/prebuilts-master
           
-          # Download Clang AOSP
-          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r488900.tar.gz
-          tar -C kernel_platform/prebuilts -xzf clang-r488900.tar.gz
-          tar -C kernel_platform/prebuilts-master -xzf clang-r488900.tar.gz
+          # Unduh Clang AOSP r488900 via GitHub Release Mirror
+          echo "Downloading Clang..."
+          curl -sL https://github.com/ZyCronia/Clang/releases/download/17.0.0-r488900/Clang-17.0.0-r488900.tar.gz -o clang.tar.gz || wget https://github.com/ZyCronia/Clang/releases/download/17.0.0-r488900/Clang-17.0.0-r488900.tar.gz -O clang.tar.gz
+          
+          echo "Extracting Clang..."
+          tar -xzf clang.tar.gz -C kernel_platform/prebuilts
+          tar -xzf clang.tar.gz -C kernel_platform/prebuilts-master
+          rm clang.tar.gz
 
       - name: Inject KernelSU Next & SuSFS
         run: |
