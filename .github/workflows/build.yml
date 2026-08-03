@@ -136,25 +136,20 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # 3 & 4. THE TRUE HERMETIC TRAP & SYSROOT MERGE (Struktur Presisi)
+          # 3 & 4. THE TRUE HERMETIC TRAP & SYSROOT MERGE
           echo "Membersihkan rintangan dan merakit sysroot fisik..."
           TRUE_SANDBOX="build/kernel/build-tools"
-          
-          # HANCURKAN file/symlink lama
           sudo rm -rf $TRUE_SANDBOX/sysroot 2>/dev/null || true
           
-          # Buat lorong direktori OS Linux yang 100% identik dengan Ubuntu
           mkdir -p $TRUE_SANDBOX/path/linux-x86
           mkdir -p $TRUE_SANDBOX/sysroot/usr/include
           mkdir -p $TRUE_SANDBOX/sysroot/usr/lib/x86_64-linux-gnu
           mkdir -p $TRUE_SANDBOX/sysroot/lib/x86_64-linux-gnu
           mkdir -p $TRUE_SANDBOX/sysroot/lib64
           
-          # Injeksi Utilitas (Mencegah nproc, tr, sed hilang)
           sudo ln -sf /usr/bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           
-          # Injeksi Sysroot Fisik Terstruktur (Mencegah libc.so patah arah)
           sudo cp -rL /usr/include/* $TRUE_SANDBOX/sysroot/usr/include/ 2>/dev/null || true
           sudo cp -rL /usr/lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
           sudo cp -rL /lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/lib/x86_64-linux-gnu/ 2>/dev/null || true
@@ -166,7 +161,7 @@ jobs:
           mkdir -p prebuilts/ndk
           mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
           
-          # 6. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI
+          # 6. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI (LTO KILLER)
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
@@ -181,10 +176,13 @@ jobs:
           export CC=clang
           export HOSTCC=clang
           
-          echo "Memulai kompilasi kernel Super Cepat (Target Terkunci)..."
+          # INI ADALAH KUNCI MUTLAK UNTUK MENUNDUKKAN GKI SCRIPT
+          export LTO=none 
+          
+          echo "Memulai kompilasi kernel Super Cepat (LTO Disabled)..."
           chmod +x build/build.sh
           ./build/build.sh
-
+          
       - name: Package Output
         run: |
           cd $GITHUB_WORKSPACE
