@@ -44,7 +44,7 @@ jobs:
           sudo ln -sf /usr/bin/llvm-objdump-17 /usr/bin/llvm-objdump
           sudo ln -sf /usr/bin/llvm-objdump-17 /bin/llvm-objdump
 
-      - name: Inject KernelSU Next (Vanilla KMI-Safe)
+      - name: Inject KernelSU Next & SuSFS (Targeted Version)
         run: |
           cd $GITHUB_WORKSPACE
           KERNEL_DIR="kernel_platform/common"
@@ -52,14 +52,30 @@ jobs:
           
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-          # SuSFS patching dihapus untuk pengujian KMI
+          
+          cd $GITHUB_WORKSPACE
+          git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git susfs
+          
+          cp susfs/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $KERNEL_DIR/KernelSU-Next/
+          cd $KERNEL_DIR/KernelSU-Next
+          patch -p1 < 10_enable_susfs_for_ksu.patch || true
+          
+          cd $GITHUB_WORKSPACE/$KERNEL_DIR
+          
+          # HANYA MENGAMBIL PATCH KERNEL 5.10+ (Cocok untuk GKI 5.15)
+          cp $GITHUB_WORKSPACE/susfs/kernel_patches/50_add_susfs_in_kernel-5.10+.patch ./ 2>/dev/null || true
+          cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/fs/* ./fs/ 2>/dev/null || true
+          cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/include/linux/* ./include/linux/ 2>/dev/null || true
+          
+          echo "Menerapkan SuSFS untuk Kernel Modern..."
+          patch -p1 < 50_add_susfs_in_kernel-5.10+.patch || true
 
-      - name: Enable KSU, Disable Knox, & Bypass Module Checks
+      - name: Enable KSU, SuSFS, & Disable Knox (KMI-Safe Mode)
         run: |
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
           
-          # Disable Samsung Knox Hydra
+          # 1. Disable Samsung Knox Hydra (WAJIB)
           sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SECURITY_PROCA=y/# CONFIG_SECURITY_PROCA is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
@@ -67,22 +83,21 @@ jobs:
           sed -i 's/CONFIG_KNOX_KAP=y/# CONFIG_KNOX_KAP is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SAMSUNG_RKP=y/# CONFIG_SAMSUNG_RKP is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           
-          # Hack KMI Bypass untuk Modul Pabrik
-          echo "Memaksa kernel mengabaikan CRC mismatch..."
-          sed -i 's/if (!crc_match(mod, crc, symname))/if (0)/g' kernel/module.c 2>/dev/null || true
-          sed -i 's/if (!same_magic(modmagic, vermagic, info->name))/if (0)/g' kernel/module.c 2>/dev/null || true
-          
-          # Enable KSU (Tanpa SuSFS Config)
+          # 2. Enable KSU & SuSFS
           sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG_FILE 2>/dev/null || true
           echo "CONFIG_KSU=y" >> $DEFCONFIG_FILE
+          echo "CONFIG_KSU_SUSFS=y" >> $DEFCONFIG_FILE
+          echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> $DEFCONFIG_FILE
+          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> $DEFCONFIG_FILE
+          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> $DEFCONFIG_FILE
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSUM=y" >> $DEFCONFIG_FILE
+          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> $DEFCONFIG_FILE
+          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
+          echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
           
-          # Disable LTO
-          echo "Mematikan LTO..."
-          sed -i 's/CONFIG_LTO=y/# CONFIG_LTO is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_LTO_CLANG_FULL=y/# CONFIG_LTO_CLANG_FULL is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_LTO_CLANG_THIN=y/# CONFIG_LTO_CLANG_THIN is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          echo "CONFIG_LTO_NONE=y" >> $DEFCONFIG_FILE
+          # 3. MEMBIARKAN LTO MENYALA
+          echo "Mempertahankan LTO bawaan agar KMI identik dengan driver pabrik..."
 
       - name: Prepare LKM & Blacklist sec.ko
         run: |
@@ -143,7 +158,7 @@ jobs:
           mkdir -p prebuilts/ndk
           mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
           
-          # 6. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI (LTO KILLER & TAR DECOY)
+          # 6. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
@@ -157,9 +172,8 @@ jobs:
           export LLVM=1
           export CC=clang
           export HOSTCC=clang
-          export LTO=none 
           
-          # Folder dan File Hantu untuk mengecoh tukang bungkus GKI
+          # File hantu avbtool dll
           echo "Menyediakan file decoy untuk sertifikasi GKI..."
           DECOY_DIR="$GITHUB_WORKSPACE/kernel_platform/prebuilts/kernel-build-tools/linux-x86"
           mkdir -p $DECOY_DIR/bin
@@ -168,20 +182,20 @@ jobs:
           touch $DECOY_DIR/bin/mkbootimg
           touch $DECOY_DIR/bin/unpack_bootimg
           
-          echo "Menyuntikkan Dummy soong_zip..."
           TRUE_SANDBOX="build/kernel/build-tools"
           echo '#!/bin/bash' > $TRUE_SANDBOX/path/linux-x86/soong_zip
           echo 'exit 0' >> $TRUE_SANDBOX/path/linux-x86/soong_zip
           chmod +x $TRUE_SANDBOX/path/linux-x86/soong_zip
           
-          # [TAMBAHAN TERBARU] Injeksi direktori /sbin agar depmod ditemukan
           sudo ln -sf /sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /usr/sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           
-          echo "Memulai kompilasi kernel Super Cepat (Final Run Absolut)..."
+          echo "Memulai kompilasi kernel (LTO Enabled + CPU Throttled)..."
           chmod +x build/build.sh
           
-          # [KODE CHEAT PAMUNGKAS] Mengabaikan error tukang bungkus di ujung jalan
+          # [KUNCI BARU] Mencekik proses kompilasi agar RAM GitHub tidak OOM
+          export MAKEFLAGS="-j4"
+          
           ./build/build.sh || true
           
       - name: Package Output
