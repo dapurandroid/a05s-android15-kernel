@@ -1,4 +1,4 @@
-name: Build KernelSU Next + SuSFS (A05s OneUI 7 / A15)
+name: Build KernelSU Next + SuSFS (The Ravindu Way)
 
 on:
   workflow_dispatch:
@@ -11,40 +11,24 @@ jobs:
         uses: easimon/maximize-build-space@master
         with:
           root-reserve-mb: 8192
-          temp-reserve-mb: 2048
+          swap-size-mb: 8192
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
 
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
-      - name: Install Build Dependencies (Super Kilat + BPF & BTF Fix)
+      - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          # [TAMBAHAN TERAKHIR] Menambahkan 'dwarves' untuk menyediakan alat 'pahole'
-          sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libsqlite3-dev libgmp-dev libmpfr-dev libmpc-dev libglib2.0-dev libpixman-1-dev python3 liblz4-tool git ccache zip dos2unix clang-17 lld-17 llvm-17 libelf-dev dwarves
-          find . -type f -name "*.sh" -exec dos2unix {} +
-          
-          # Memaku Clang dan LLD ke sistem dasar
-          sudo ln -sf /usr/bin/clang-17 /usr/bin/clang
-          sudo ln -sf /usr/bin/clang-17 /bin/clang
-          sudo ln -sf /usr/bin/ld.lld-17 /usr/bin/ld.lld
-          sudo ln -sf /usr/bin/ld.lld-17 /bin/ld.lld
-          
-          # Memaku LLVM tools agar tidak "not found" saat perakitan BPF
-          sudo ln -sf /usr/bin/llvm-ar-17 /usr/bin/llvm-ar
-          sudo ln -sf /usr/bin/llvm-ar-17 /bin/llvm-ar
-          sudo ln -sf /usr/bin/llvm-nm-17 /usr/bin/llvm-nm
-          sudo ln -sf /usr/bin/llvm-nm-17 /bin/llvm-nm
-          sudo ln -sf /usr/bin/llvm-strip-17 /usr/bin/llvm-strip
-          sudo ln -sf /usr/bin/llvm-strip-17 /bin/llvm-strip
-          sudo ln -sf /usr/bin/llvm-objcopy-17 /usr/bin/llvm-objcopy
-          sudo ln -sf /usr/bin/llvm-objcopy-17 /bin/llvm-objcopy
-          sudo ln -sf /usr/bin/llvm-objdump-17 /usr/bin/llvm-objdump
-          sudo ln -sf /usr/bin/llvm-objdump-17 /bin/llvm-objdump
+          sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
+          python3 bc cpio tar wget curl git-core zlib1g-dev liblz4-tool libncurses5-dev clang \
+          llvm lld gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu jq rsync python3-pip zip
 
-      - name: Inject KernelSU Next & SuSFS (Targeted Version)
+      - name: Inject KernelSU Next & SuSFS
         run: |
           cd $GITHUB_WORKSPACE
           KERNEL_DIR="kernel_platform/common"
@@ -61,21 +45,16 @@ jobs:
           patch -p1 < 10_enable_susfs_for_ksu.patch || true
           
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
-          
-          # HANYA MENGAMBIL PATCH KERNEL 5.10+ (Cocok untuk GKI 5.15)
           cp $GITHUB_WORKSPACE/susfs/kernel_patches/50_add_susfs_in_kernel-5.10+.patch ./ 2>/dev/null || true
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/fs/* ./fs/ 2>/dev/null || true
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/include/linux/* ./include/linux/ 2>/dev/null || true
-          
-          echo "Menerapkan SuSFS untuk Kernel Modern..."
           patch -p1 < 50_add_susfs_in_kernel-5.10+.patch || true
 
-      - name: Enable KSU, SuSFS, & Disable Knox (ThinLTO KMI-Safe)
+      - name: Enable KSU, Disable Knox, & Disable LTO (Fast Build)
         run: |
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
           
-          # 1. Disable Samsung Knox Hydra
           sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SECURITY_PROCA=y/# CONFIG_SECURITY_PROCA is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
@@ -83,7 +62,6 @@ jobs:
           sed -i 's/CONFIG_KNOX_KAP=y/# CONFIG_KNOX_KAP is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SAMSUNG_RKP=y/# CONFIG_SAMSUNG_RKP is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           
-          # 2. Enable KSU & SuSFS
           sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG_FILE 2>/dev/null || true
           echo "CONFIG_KSU=y" >> $DEFCONFIG_FILE
@@ -96,27 +74,19 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
           
-          # 3. THE THIN-LTO HACK (KMI Safe + RAM Friendly)
-          echo "Mengaktifkan ThinLTO agar RAM GitHub selamat dan KMI identik..."
-          sed -i 's/CONFIG_LTO_NONE=y/# CONFIG_LTO_NONE is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          echo "CONFIG_LTO_NONE=y" >> $DEFCONFIG_FILE
+          sed -i 's/CONFIG_LTO=y/# CONFIG_LTO is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_LTO_CLANG_FULL=y/# CONFIG_LTO_CLANG_FULL is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          echo "CONFIG_LTO=y" >> $DEFCONFIG_FILE
-          echo "CONFIG_LTO_CLANG=y" >> $DEFCONFIG_FILE
-          echo "CONFIG_LTO_CLANG_THIN=y" >> $DEFCONFIG_FILE
+          sed -i 's/CONFIG_LTO_CLANG_THIN=y/# CONFIG_LTO_CLANG_THIN is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          
+          echo "CONFIG_MODVERSIONS=n" >> $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_MODVERSIONS=y/# CONFIG_MODVERSIONS is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
 
-      - name: Prepare LKM & Blacklist sec.ko
-        run: |
-          cd $GITHUB_WORKSPACE
-          find vendor/qcom/opensource -name "Makefile" -type f -exec sed -i '/sec_common/d' {} + || true
-          find vendor/qcom/opensource -name "Kconfig" -type f -exec sed -i 's/source "vendor\/qcom\/opensource\/sec_common\/Kconfig"//g' {} + || true
-          mkdir -p kernel_platform/vendor/qcom/opensource/modules
-          echo "blacklist sec" > kernel_platform/vendor/qcom/opensource/modules/modules.blocklist
-
-      - name: Compile Kernel via Google Build System (True Hermetic Target)
+      - name: Compile Kernel
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
           
-          # 1. ROOT SYMLINK BUILD
           sudo rm -rf /build 2>/dev/null || true
           mkdir -p build
           cat << 'EOF' > build/gettop.sh
@@ -127,7 +97,6 @@ jobs:
           chmod +x build/gettop.sh
           sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
           
-          # 2. PHYSICAL CLONE
           cp msm-kernel/build.config.* common/ 2>/dev/null || true
           cp common/build.config.* msm-kernel/ 2>/dev/null || true
           mkdir -p kernel_platform
@@ -138,11 +107,8 @@ jobs:
           find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
           find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # 3 & 4. THE TRUE HERMETIC TRAP & SYSROOT MERGE
-          echo "Membersihkan rintangan dan merakit sysroot fisik..."
           TRUE_SANDBOX="build/kernel/build-tools"
           sudo rm -rf $TRUE_SANDBOX/sysroot 2>/dev/null || true
-          
           mkdir -p $TRUE_SANDBOX/path/linux-x86
           mkdir -p $TRUE_SANDBOX/sysroot/usr/include
           mkdir -p $TRUE_SANDBOX/sysroot/usr/lib/x86_64-linux-gnu
@@ -151,35 +117,28 @@ jobs:
           
           sudo ln -sf /usr/bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
-          
           sudo cp -rL /usr/include/* $TRUE_SANDBOX/sysroot/usr/include/ 2>/dev/null || true
           sudo cp -rL /usr/lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
           sudo cp -rL /lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/lib/x86_64-linux-gnu/ 2>/dev/null || true
           sudo cp -rL /lib64/* $TRUE_SANDBOX/sysroot/lib64/ 2>/dev/null || true
           sudo cp -rL /usr/lib/gcc $TRUE_SANDBOX/sysroot/usr/lib/ 2>/dev/null || true
           
-          # 5. TRIK NDK DUMMY
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p prebuilts/ndk
           mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
           
-          # 6. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
-          
           export BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec
           export CHIPSET_NAME=sm6225
           export TARGET_PRODUCT=gki
           export OUT_DIR=$GITHUB_WORKSPACE/out
           mkdir -p $OUT_DIR
-          
           export LLVM=1
           export CC=clang
           export HOSTCC=clang
           
-          # File hantu avbtool dll
-          echo "Menyediakan file decoy untuk sertifikasi GKI..."
           DECOY_DIR="$GITHUB_WORKSPACE/kernel_platform/prebuilts/kernel-build-tools/linux-x86"
           mkdir -p $DECOY_DIR/bin
           touch $DECOY_DIR/bin/avbtool
@@ -187,7 +146,6 @@ jobs:
           touch $DECOY_DIR/bin/mkbootimg
           touch $DECOY_DIR/bin/unpack_bootimg
           
-          TRUE_SANDBOX="build/kernel/build-tools"
           echo '#!/bin/bash' > $TRUE_SANDBOX/path/linux-x86/soong_zip
           echo 'exit 0' >> $TRUE_SANDBOX/path/linux-x86/soong_zip
           chmod +x $TRUE_SANDBOX/path/linux-x86/soong_zip
@@ -195,24 +153,25 @@ jobs:
           sudo ln -sf /sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /usr/sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           
-          echo "Memulai kompilasi kernel (ThinLTO Enabled + CPU Throttled)..."
           chmod +x build/build.sh
-          
-          # Cekik proses agar ThinLTO tidak rakus RAM saat linking
-          export MAKEFLAGS="-j4"
-          
           ./build/build.sh || true
 
-      - name: Package Output
+      - name: Package Output (Full Modules Extract)
         run: |
-          cd $GITHUB_WORKSPACE
-          mkdir -p output
-          find . -name "Image" -o -name "Image.gz" -o -name "*.ko" | grep -v "sec.ko" | xargs -I {} cp {} output/ 2>/dev/null || true
+          mkdir -p output/modules
+          
+          # 1. Cari File Image (Otak Kernel)
+          find $GITHUB_WORKSPACE/out -name "Image" -type f -exec cp {} output/ \; 2>/dev/null || true
+          
+          # 2. Cari Semua Driver (.ko) dan kumpulkan
+          find $GITHUB_WORKSPACE/out -name "*.ko" -type f -exec cp {} output/modules/ \; 2>/dev/null || true
+          
+          # 3. Zip semua temuan agar mudah di-download
           cd output
-          zip -r $GITHUB_WORKSPACE/kernel_susfs_a05s.zip *
+          zip -r Kernel_A05s_KSU_Modules.zip Image modules/
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KernelSU-Next-SuSFS-A05s-A15
-          path: kernel_susfs_a05s.zip
+          name: KernelSU_SuSFS_A05s_Modules
+          path: output/Kernel_A05s_KSU_Modules.zip
