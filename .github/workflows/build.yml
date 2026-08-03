@@ -19,6 +19,17 @@ jobs:
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
+      # [KODE CHEAT BARU] Menyuntikkan 16GB Virtual RAM ke Server GitHub
+      - name: Inject 16GB Swap Space (LTO RAM Hack)
+        run: |
+          echo "Membuat 16GB Swap Space agar LTO tidak meledak..."
+          sudo fallocate -l 16G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          echo "Total RAM Server Sekarang:"
+          free -h
+
       - name: Install Build Dependencies (Super Kilat + BPF & BTF Fix)
         run: |
           sudo apt-get update
@@ -190,13 +201,12 @@ jobs:
           sudo ln -sf /sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /usr/sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           
-          echo "Memulai kompilasi kernel (LTO Enabled + CPU Throttled)..."
+          echo "Memulai kompilasi kernel (LTO Enabled + 16GB Swap)..."
           chmod +x build/build.sh
           
-          # [KUNCI BARU] Mencekik proses kompilasi agar RAM GitHub tidak OOM
-          export MAKEFLAGS="-j4"
-          
+          # Hapus export MAKEFLAGS="-j4", biarkan Clang menggunakan seluruh inti CPU
           ./build/build.sh || true
+
           
       - name: Package Output
         run: |
