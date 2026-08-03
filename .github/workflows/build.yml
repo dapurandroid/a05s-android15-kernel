@@ -71,14 +71,18 @@ jobs:
           echo "Menerapkan SuSFS untuk Kernel Modern..."
           patch -p1 < 50_add_susfs_in_kernel-5.10+.patch || true
 
-      - name: Enable KSU, SuSFS, Disable DEFEX, & Disable LTO
+      - name: Enable KSU, SuSFS, Disable Knox Hydra, & Disable LTO
         run: |
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
           
-          # Disable Samsung Security
+          # Disable Samsung Security (The Full Knox Hydra)
           sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_SECURITY_PROCA=y/# CONFIG_SECURITY_PROCA is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_SAMSUNG_PROCA=y/# CONFIG_SAMSUNG_PROCA is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_KNOX_KAP=y/# CONFIG_KNOX_KAP is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_SAMSUNG_RKP=y/# CONFIG_SAMSUNG_RKP is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           
           # Enable KSU & SuSFS
           sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
@@ -94,8 +98,8 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
           
-          # [TAMBAHAN BARU] DISABLE LTO (Mencegah Out of Memory / Crash di vmlinux.o)
-          echo "Mematikan LTO agar RAM GitHub Actions tidak jebol..."
+          # Disable LTO (Mencegah Out of Memory / Crash di vmlinux.o)
+          echo "Mematikan LTO..."
           sed -i 's/CONFIG_LTO=y/# CONFIG_LTO is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_LTO_CLANG_FULL=y/# CONFIG_LTO_CLANG_FULL is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
