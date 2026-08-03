@@ -71,12 +71,12 @@ jobs:
           echo "Menerapkan SuSFS untuk Kernel Modern..."
           patch -p1 < 50_add_susfs_in_kernel-5.10+.patch || true
 
-      - name: Enable KSU, SuSFS, Disable Knox Hydra, & Disable LTO
+      - name: Enable KSU, SuSFS, Disable Knox & Bypass Module Check
         run: |
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
           
-          # Disable Samsung Security (The Full Knox Hydra)
+          # 1. Disable Samsung Security (The Full Knox Hydra)
           sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SECURITY_PROCA=y/# CONFIG_SECURITY_PROCA is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
@@ -84,10 +84,16 @@ jobs:
           sed -i 's/CONFIG_KNOX_KAP=y/# CONFIG_KNOX_KAP is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SAMSUNG_RKP=y/# CONFIG_SAMSUNG_RKP is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           
-          # Enable KSU & SuSFS
+          # 2. RAHASIA RAVINDU: Memaksa Kernel Menerima Driver Pabrik (Bypass Module Rejection)
+          echo "Mematikan verifikasi modul agar driver pabrik tidak menolak SuSFS..."
+          sed -i 's/CONFIG_MODVERSIONS=y/# CONFIG_MODVERSIONS is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_MODULE_SIG=y/# CONFIG_MODULE_SIG is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_MODULE_SIG_ALL=y/# CONFIG_MODULE_SIG_ALL is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_MODULE_SIG_FORCE=y/# CONFIG_MODULE_SIG_FORCE is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          
+          # 3. Enable KSU & SuSFS (Stealth Config)
           sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG_FILE 2>/dev/null || true
-          
           echo "CONFIG_KSU=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> $DEFCONFIG_FILE
@@ -98,7 +104,7 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
           
-          # Disable LTO (Mencegah Out of Memory / Crash di vmlinux.o)
+          # 4. Disable LTO (Mencegah OOM di vmlinux.o)
           echo "Mematikan LTO..."
           sed -i 's/CONFIG_LTO=y/# CONFIG_LTO is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
