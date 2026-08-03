@@ -161,7 +161,7 @@ jobs:
           mkdir -p prebuilts/ndk
           mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
           
-          # 6. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI (LTO KILLER)
+          # 6. KUNCI ENVIRONMENT VARIABLES & EKSEKUSI (LTO KILLER & TAR DECOY)
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
@@ -176,10 +176,14 @@ jobs:
           export CC=clang
           export HOSTCC=clang
           
-          # INI ADALAH KUNCI MUTLAK UNTUK MENUNDUKKAN GKI SCRIPT
+          # Kunci LTO Killer
           export LTO=none 
           
-          echo "Memulai kompilasi kernel Super Cepat (LTO Disabled)..."
+          # [TAMBAHAN TERAKHIR] Folder Hantu untuk mengecoh tukang bungkus (tar) GKI
+          echo "Membuat folder decoy untuk sertifikasi GKI..."
+          mkdir -p $GITHUB_WORKSPACE/kernel_platform/prebuilts/kernel-build-tools/linux-x86
+          
+          echo "Memulai kompilasi kernel Super Cepat (Final Run)..."
           chmod +x build/build.sh
           ./build/build.sh
           
