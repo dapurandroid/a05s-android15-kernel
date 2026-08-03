@@ -19,19 +19,6 @@ jobs:
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
-      # [KODE CHEAT BARU] Menyuntikkan 16GB Virtual RAM ke Server GitHub
-      - name: Inject 8GB Swap Space (LTO RAM Hack)
-        run: |
-          echo "Membuat 8GB Swap di partisi /mnt yang sudah diluangkan..."
-          sudo fallocate -l 8G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=8192
-          sudo chmod 600 /mnt/swapfile
-          sudo mkswap /mnt/swapfile
-          sudo swapon /mnt/swapfile
-          echo "Total RAM & Swap Server Sekarang:"
-          free -h
-          echo "Sisa Ruang Penyimpanan:"
-          df -h
-
       - name: Install Build Dependencies (Super Kilat + BPF & BTF Fix)
         run: |
           sudo apt-get update
@@ -83,12 +70,12 @@ jobs:
           echo "Menerapkan SuSFS untuk Kernel Modern..."
           patch -p1 < 50_add_susfs_in_kernel-5.10+.patch || true
 
-      - name: Enable KSU, SuSFS, & Disable Knox (KMI-Safe Mode)
+      - name: Enable KSU, SuSFS, & Disable Knox (ThinLTO KMI-Safe)
         run: |
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
           
-          # 1. Disable Samsung Knox Hydra (WAJIB)
+          # 1. Disable Samsung Knox Hydra
           sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_SECURITY_PROCA=y/# CONFIG_SECURITY_PROCA is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
@@ -109,8 +96,13 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
           
-          # 3. MEMBIARKAN LTO MENYALA
-          echo "Mempertahankan LTO bawaan agar KMI identik dengan driver pabrik..."
+          # 3. THE THIN-LTO HACK (KMI Safe + RAM Friendly)
+          echo "Mengaktifkan ThinLTO agar RAM GitHub selamat dan KMI identik..."
+          sed -i 's/CONFIG_LTO_NONE=y/# CONFIG_LTO_NONE is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_LTO_CLANG_FULL=y/# CONFIG_LTO_CLANG_FULL is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          echo "CONFIG_LTO=y" >> $DEFCONFIG_FILE
+          echo "CONFIG_LTO_CLANG=y" >> $DEFCONFIG_FILE
+          echo "CONFIG_LTO_CLANG_THIN=y" >> $DEFCONFIG_FILE
 
       - name: Prepare LKM & Blacklist sec.ko
         run: |
@@ -203,13 +195,14 @@ jobs:
           sudo ln -sf /sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /usr/sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           
-          echo "Memulai kompilasi kernel (LTO Enabled + 16GB Swap)..."
+          echo "Memulai kompilasi kernel (ThinLTO Enabled + CPU Throttled)..."
           chmod +x build/build.sh
           
-          # Hapus export MAKEFLAGS="-j4", biarkan Clang menggunakan seluruh inti CPU
+          # Cekik proses agar ThinLTO tidak rakus RAM saat linking
+          export MAKEFLAGS="-j4"
+          
           ./build/build.sh || true
 
-          
       - name: Package Output
         run: |
           cd $GITHUB_WORKSPACE
