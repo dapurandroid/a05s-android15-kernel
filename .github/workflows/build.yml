@@ -22,13 +22,15 @@ jobs:
       # [KODE CHEAT BARU] Menyuntikkan 16GB Virtual RAM ke Server GitHub
       - name: Inject 8GB Swap Space (LTO RAM Hack)
         run: |
-          echo "Membuat 8GB Swap Space agar LTO aman dan SSD tidak penuh..."
-          sudo fallocate -l 8G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          echo "Total RAM Server Sekarang:"
+          echo "Membuat 8GB Swap di partisi /mnt yang sudah diluangkan..."
+          sudo fallocate -l 8G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=8192
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          echo "Total RAM & Swap Server Sekarang:"
           free -h
+          echo "Sisa Ruang Penyimpanan:"
+          df -h
 
       - name: Install Build Dependencies (Super Kilat + BPF & BTF Fix)
         run: |
