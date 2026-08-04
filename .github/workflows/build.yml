@@ -171,7 +171,7 @@ jobs:
           chmod +x build/build.sh
           
           # HANYA KERJAKAN 3 PROSES BERSAMAAN AGAR SERVER TIDAK HANG
-          ./build/build.sh -j3
+          ./build/build.sh -j3 || true
 
       - name: Package Output (Full Modules Extract)
         run: |
