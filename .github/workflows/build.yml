@@ -93,6 +93,7 @@ jobs:
 
       - name: Compile Kernel
         run: |
+          echo "1. Menyiapkan Dapur Murni..."
           cd $GITHUB_WORKSPACE/kernel_platform
           
           sudo rm -rf /build 2>/dev/null || true
@@ -122,7 +123,6 @@ jobs:
           mkdir -p $TRUE_SANDBOX/sysroot/usr/lib/x86_64-linux-gnu
           mkdir -p $TRUE_SANDBOX/sysroot/lib/x86_64-linux-gnu
           mkdir -p $TRUE_SANDBOX/sysroot/lib64
-          
           sudo ln -sf /usr/bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo cp -rL /usr/include/* $TRUE_SANDBOX/sysroot/usr/include/ 2>/dev/null || true
@@ -131,13 +131,9 @@ jobs:
           sudo cp -rL /lib64/* $TRUE_SANDBOX/sysroot/lib64/ 2>/dev/null || true
           sudo cp -rL /usr/lib/gcc $TRUE_SANDBOX/sysroot/usr/lib/ 2>/dev/null || true
           
-          # ========================================================
-          # INI BARIS YANG SAYA HILANGKAN KEMARIN (PENYEBAB CRASH)
-          # ========================================================
           mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
           mkdir -p prebuilts/ndk
           mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
-          # ========================================================
           
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
@@ -151,21 +147,33 @@ jobs:
           export CC=clang
           export HOSTCC=clang
           
-          echo "Mematikan LTO & Mengamankan RAM..."
+          echo "2. Mematikan LTO untuk mempercepat kompilasi..."
           export LTO=none
           export LTO_CLANG=none
           export MAKEFLAGS="-j3"
           
-          echo "Menyuntikkan Paksa Ratusan Driver Qualcomm ke dalam File Konfigurasi Fisik..."
-          cat << 'EOF' >> msm-kernel/build.config.msm.m269.sec
-          
-          # SUNTIKAN OOT MODULES QUALCOMM
-          EXT_MODULES="../vendor/qcom/opensource/mmrm-driver ../vendor/qcom/opensource/mm-drivers/hw_fence ../vendor/qcom/opensource/mm-drivers/sync_fence ../vendor/qcom/opensource/mm-drivers/msm_ext_display ../vendor/qcom/opensource/securemsm-kernel ../vendor/qcom/opensource/display-drivers/msm ../vendor/qcom/opensource/audio-kernel ../vendor/qcom/opensource/camera-kernel"
-          EOF
-          
-          echo "Mengeksekusi Koki Utama..."
+          echo "3. Mengeksekusi Koki Google (Memasak Image selama ~22 Menit)..."
           chmod +x build/build.sh
           ./build/build.sh -j3 || true
+          
+          echo "4. MENGHANCURKAN GEMBOK MAKEFILE QUALCOMM..."
+          # Ini adalah kunci mutlak. Mengubah obj-$(CONFIG_XYZ) menjadi obj-m (wajib kompilasi)
+          find $GITHUB_WORKSPACE/vendor/qcom/opensource -name "Makefile" -type f -exec sed -i 's/obj-\$(CONFIG_[a-zA-Z0-9_]*)/obj-m/g' {} +
+          
+          echo "5. RAW MAKE: MEMASAK DRIVER OOT SECARA MANUAL!"
+          export KERNEL_OUT_DIR=$GITHUB_WORKSPACE/out/gki_kernel/kernel_platform/common
+          
+          # Menghubungkan simbol antar driver agar tidak error saat linking
+          export KBUILD_EXTRA_SYMBOLS="$KERNEL_OUT_DIR/../vendor/qcom/opensource/mmrm-driver/Module.symvers $KERNEL_OUT_DIR/../vendor/qcom/opensource/mm-drivers/hw_fence/Module.symvers $KERNEL_OUT_DIR/../vendor/qcom/opensource/mm-drivers/sync_fence/Module.symvers $KERNEL_OUT_DIR/../vendor/qcom/opensource/mm-drivers/msm_ext_display/Module.symvers $KERNEL_OUT_DIR/../vendor/qcom/opensource/securemsm-kernel/Module.symvers"
+          
+          # Daftar driver OOT
+          OOT_MODULES="vendor/qcom/opensource/mmrm-driver vendor/qcom/opensource/mm-drivers/hw_fence vendor/qcom/opensource/mm-drivers/sync_fence vendor/qcom/opensource/mm-drivers/msm_ext_display vendor/qcom/opensource/securemsm-kernel vendor/qcom/opensource/display-drivers/msm vendor/qcom/opensource/audio-kernel vendor/qcom/opensource/camera-kernel"
+          
+          cd $GITHUB_WORKSPACE
+          for MODULE_DIR in $OOT_MODULES; do
+              echo "Memasak Manual Modul OOT: $MODULE_DIR"
+              make -C $KERNEL_OUT_DIR M=$GITHUB_WORKSPACE/$MODULE_DIR ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 modules || echo "PERINGATAN: Gagal memasak $MODULE_DIR"
+          done
           
       - name: Package Output (Full Modules Extract)
         run: |
