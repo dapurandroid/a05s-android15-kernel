@@ -87,8 +87,12 @@ jobs:
           chmod -R +x LKM_Tools/*.sh
           
           echo "2. Menyiapkan Folder Pancingan NDK agar Skrip Samsung tidak mati..."
-          mkdir -p prebuilts/ndk
-          export MAKEFLAGS="-j3" # Kunci anti-OOM saat Thin LTO berjalan
+          mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+          mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
+          mkdir -p $GITHUB_WORKSPACE/kernel_platform/prebuilts/ndk
+          
+          echo "Mengunci batas Thread untuk mengamankan RAM saat THIN LTO berjalan..."
+          export MAKEFLAGS="-j3"
           
           echo "3. Mengeksekusi Skrip Master Samsung (Memasak Kernel & Ratusan Driver)..."
           chmod +x build_kernel_GKI.sh
@@ -99,6 +103,12 @@ jobs:
           STAGING_DIR=$(find $GITHUB_WORKSPACE/out -type d -name "staging" | head -n 1)
           SYSTEM_MAP=$(find $GITHUB_WORKSPACE/out -name "System.map" | head -n 1)
           STRIP_TOOL=$(find $GITHUB_WORKSPACE/kernel_platform/prebuilts -name "llvm-strip" | grep -v "ndk" | head -n 1)
+          
+          echo "=== DEBUG RADAR: CEK LOKASI FILE PENTING ==="
+          echo "STAGING_DIR: $STAGING_DIR"
+          echo "SYSTEM_MAP : $SYSTEM_MAP"
+          echo "STRIP_TOOL : $STRIP_TOOL"
+          echo "============================================"
           
           echo "5. EKSEKUSI LKM_TOOLS: Menerjemahkan modules.dep pabrik..."
           ./LKM_Tools/01.module_dep.sh prebuilts/vendor_boot/modules.dep prebuilts/vendor_boot
@@ -116,7 +126,7 @@ jobs:
             $STRIP_TOOL \
             output/vendor_boot_modules
             
-          echo "7. EKSEKUSI LKM_TOOLS: Menyedot modul vendor_dlkm (Pruning & Blacklist sec.ko aktif)..."
+          echo "7. EKSEKUSI LKM_TOOLS: Menyedot modul vendor_dlkm (Pruning & Blacklist aktif)..."
           ./LKM_Tools/03.prepare_vendor_dlkm.sh \
             prebuilts/vendor_dlkm/modules_list.txt \
             $STAGING_DIR \
@@ -131,6 +141,11 @@ jobs:
           echo "8. Mengumpulkan Image & Mengemas Hasil Akhir..."
           find $GITHUB_WORKSPACE/out -name "Image" -type f -exec cp {} output/ \; 2>/dev/null || true
           cd output
+          
+          echo "=== DEBUG: HASIL PANEN FINAL ==="
+          ls -lh vendor_boot_modules/ || true
+          ls -lh vendor_dlkm_modules/ || true
+          
           zip -r Kernel_A05s_KSU_SuSFS_Final.zip Image vendor_boot_modules/ vendor_dlkm_modules/
 
       - name: Upload Build Artifact
