@@ -168,6 +168,10 @@ jobs:
           echo "Menjinakkan kompilator agar CPU tidak meledak (Maksimal 3 Thread)..."
           export MAKEFLAGS="-j3"
           
+          echo "Mendeklarasikan Variabel Wajib untuk Mandor Samsung..."
+          export TARGET_BOARD_PLATFORM=gki
+          export MODNAME=audio_dlkm
+          
           echo "Memasukkan Ratusan Driver OOT (Audio, Display, Camera) ke Panci Masakan..."
           export EXT_MODULES="../vendor/qcom/opensource/mm-drivers/msm_ext_display \
           ../vendor/qcom/opensource/mm-drivers/sync_fence \
@@ -186,10 +190,11 @@ jobs:
           $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/msm_ext_display/Module.symvers \
           $GITHUB_WORKSPACE/out/vendor/qcom/opensource/securemsm-kernel/Module.symvers"
           
-          chmod +x build/build.sh
+          echo "Memanggil Mandor Dapur Samsung (prepare_vendor.sh)..."
+          chmod +x build/android/prepare_vendor.sh
           
-          # HANYA KERJAKAN 3 PROSES BERSAMAAN AGAR SERVER TIDAK HANG
-          ./build/build.sh -j3 || true
+          # EKSEKUSI MANDOR (Dia yang akan mengatur build.sh dan ratusan modul OOT)
+          RECOMPILE_KERNEL=1 ./build/android/prepare_vendor.sh sec gki || true
 
       - name: Package Output (Full Modules Extract)
         run: |
