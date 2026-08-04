@@ -7,6 +7,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
+          python3 bc cpio tar wget curl git-core zlib1g-dev liblz4-tool libncurses5-dev clang \
+          llvm lld gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu jq rsync python3-pip zip dwarves
+
       - name: Maximize Build Space
         uses: easimon/maximize-build-space@master
         with:
@@ -20,13 +27,6 @@ jobs:
 
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
-
-      - name: Install Build Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
-          python3 bc cpio tar wget curl git-core zlib1g-dev liblz4-tool libncurses5-dev clang \
-          llvm lld gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu jq rsync python3-pip zip dwarves
 
       - name: Inject KernelSU Next & SuSFS
         run: |
