@@ -166,15 +166,24 @@ jobs:
           export LTO_CLANG=none
           export MAKEFLAGS="-j3"
           
-          echo "Kembali ke Skrip Master Samsung agar OOT Modules ikut dimasak..."
-          cd $GITHUB_WORKSPACE
-          chmod +x build_kernel_GKI.sh
+          echo "Mengeksekusi Koki Utama untuk memasak Core Kernel (Image)..."
+          chmod +x build/build.sh
+          ./build/build.sh -j3 || true
           
-          # Eksekusi skrip master dari root direktori (Agar path ../vendor/ terbaca)
-          # Argumen: Target, Variant, Chipset
-          # Gunakan || true agar error build_image (Command not found) di akhir tetap diabaikan!
-          ./build_kernel_GKI.sh a05s_global_gki userdebug sm6225 || true
-
+          echo "========================================================="
+          echo "JALUR NINJA: MEMASAK DRIVER QUALCOMM SECARA MANUAL"
+          echo "========================================================="
+          export KERNEL_OUT_DIR=$GITHUB_WORKSPACE/out/gki_kernel/kernel_platform/common
+          export KBUILD_EXTRA_SYMBOLS="$KERNEL_OUT_DIR/../vendor/qcom/opensource/mmrm-driver/Module.symvers $KERNEL_OUT_DIR/../vendor/qcom/opensource/mm-drivers/hw_fence/Module.symvers $KERNEL_OUT_DIR/../vendor/qcom/opensource/mm-drivers/sync_fence/Module.symvers $KERNEL_OUT_DIR/../vendor/qcom/opensource/mm-drivers/msm_ext_display/Module.symvers $KERNEL_OUT_DIR/../vendor/qcom/opensource/securemsm-kernel/Module.symvers"
+          
+          # Daftar driver OOT
+          OOT_MODULES="../vendor/qcom/opensource/mmrm-driver ../vendor/qcom/opensource/mm-drivers/hw_fence ../vendor/qcom/opensource/mm-drivers/sync_fence ../vendor/qcom/opensource/mm-drivers/msm_ext_display ../vendor/qcom/opensource/securemsm-kernel ../vendor/qcom/opensource/display-drivers/msm ../vendor/qcom/opensource/audio-kernel ../vendor/qcom/opensource/camera-kernel"
+          
+          for MODULE_DIR in $OOT_MODULES; do
+              echo "Memasak Modul OOT: $MODULE_DIR"
+              make -C $KERNEL_OUT_DIR M=$GITHUB_WORKSPACE/kernel_platform/$MODULE_DIR ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 modules || echo "PERINGATAN: Gagal memasak $MODULE_DIR"
+          done
+          
       - name: Package Output (Full Modules Extract)
         run: |
           # Buat folder output di root workspace
