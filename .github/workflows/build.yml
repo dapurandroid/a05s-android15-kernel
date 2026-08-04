@@ -92,9 +92,7 @@ jobs:
           sed -i 's/CONFIG_DEBUG_INFO_BTF_MODULES=y/# CONFIG_DEBUG_INFO_BTF_MODULES is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
 
       - name: Compile Kernel
-        continue-on-error: true # KUNCI MUTLAK: Abaikan error build_image di akhir agar tetap bisa panen
         run: |
-          echo "1. Membangun Sandbox Minimalis..."
           cd $GITHUB_WORKSPACE/kernel_platform
           
           sudo rm -rf /build 2>/dev/null || true
@@ -107,35 +105,59 @@ jobs:
           chmod +x build/gettop.sh
           sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
           
-          # Sinkronisasi build.config
           cp msm-kernel/build.config.* common/ 2>/dev/null || true
           cp common/build.config.* msm-kernel/ 2>/dev/null || true
           mkdir -p kernel_platform
           cp -a common kernel_platform/ 2>/dev/null || true
           cp -a msm-kernel kernel_platform/ 2>/dev/null || true
+          find . -name "build.config.msm.common" -exec cp {} kernel_platform/common/ \; 2>/dev/null || true
+          find . -name "build.config.msm.gki" -exec cp {} kernel_platform/common/ \; 2>/dev/null || true
+          find . -name "build.config.msm.common" -exec cp {} common/ \; 2>/dev/null || true
+          find . -name "build.config.msm.gki" -exec cp {} common/ \; 2>/dev/null || true
           
-          # Memalsukan soong_zip agar AOSP tidak panik di pertengahan jalan
           TRUE_SANDBOX="build/kernel/build-tools"
           sudo rm -rf $TRUE_SANDBOX/sysroot 2>/dev/null || true
           mkdir -p $TRUE_SANDBOX/path/linux-x86
+          mkdir -p $TRUE_SANDBOX/sysroot/usr/include
+          mkdir -p $TRUE_SANDBOX/sysroot/usr/lib/x86_64-linux-gnu
+          mkdir -p $TRUE_SANDBOX/sysroot/lib/x86_64-linux-gnu
+          mkdir -p $TRUE_SANDBOX/sysroot/lib64
+          
           sudo ln -sf /usr/bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
-          echo '#!/bin/bash' > $TRUE_SANDBOX/path/linux-x86/soong_zip
-          echo 'exit 0' >> $TRUE_SANDBOX/path/linux-x86/soong_zip
-          chmod +x $TRUE_SANDBOX/path/linux-x86/soong_zip
+          sudo cp -rL /usr/include/* $TRUE_SANDBOX/sysroot/usr/include/ 2>/dev/null || true
+          sudo cp -rL /usr/lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/usr/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          sudo cp -rL /lib/x86_64-linux-gnu/* $TRUE_SANDBOX/sysroot/lib/x86_64-linux-gnu/ 2>/dev/null || true
+          sudo cp -rL /lib64/* $TRUE_SANDBOX/sysroot/lib64/ 2>/dev/null || true
+          sudo cp -rL /usr/lib/gcc $TRUE_SANDBOX/sysroot/usr/lib/ 2>/dev/null || true
           
-          echo "2. Mematikan LTO..."
+          export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
+          export DEBIAN_FRONTEND=noninteractive
+          export COPY_NEEDED=0
+          export BUILD_CONFIG=msm-kernel/build.config.msm.m269.sec
+          export CHIPSET_NAME=sm6225
+          export TARGET_PRODUCT=gki
+          export OUT_DIR=$GITHUB_WORKSPACE/out
+          mkdir -p $OUT_DIR
+          export LLVM=1
+          export CC=clang
+          export HOSTCC=clang
+          
+          echo "Mematikan LTO & Mengamankan RAM..."
           export LTO=none
           export LTO_CLANG=none
           export MAKEFLAGS="-j3"
           
-          echo "3. Mengeksekusi Skrip Master Pabrik (Pembuka Gembok Qualcomm)..."
-          cd $GITHUB_WORKSPACE
-          chmod +x build_kernel_GKI.sh
+          echo "Menyuntikkan Paksa Ratusan Driver Qualcomm ke dalam File Konfigurasi Fisik..."
+          cat << 'EOF' >> msm-kernel/build.config.msm.m269.sec
           
-          # Eksekusi. Biarkan ia menyelesaikan otak kernel & ratusan driver OOT.
-          # Saat ia gagal di tahap packaging (build_image), GitHub akan tetap lanjut ke tahap Package Output.
-          ./build_kernel_GKI.sh a05s_global_gki userdebug sm6225
+          # SUNTIKAN OOT MODULES QUALCOMM
+          EXT_MODULES="../vendor/qcom/opensource/mmrm-driver ../vendor/qcom/opensource/mm-drivers/hw_fence ../vendor/qcom/opensource/mm-drivers/sync_fence ../vendor/qcom/opensource/mm-drivers/msm_ext_display ../vendor/qcom/opensource/securemsm-kernel ../vendor/qcom/opensource/display-drivers/msm ../vendor/qcom/opensource/audio-kernel ../vendor/qcom/opensource/camera-kernel"
+          EOF
+          
+          echo "Mengeksekusi Koki Utama..."
+          chmod +x build/build.sh
+          ./build/build.sh -j3 || true
           
       - name: Package Output (Full Modules Extract)
         run: |
