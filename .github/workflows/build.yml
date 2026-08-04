@@ -131,6 +131,14 @@ jobs:
           sudo cp -rL /lib64/* $TRUE_SANDBOX/sysroot/lib64/ 2>/dev/null || true
           sudo cp -rL /usr/lib/gcc $TRUE_SANDBOX/sysroot/usr/lib/ 2>/dev/null || true
           
+          # ========================================================
+          # INI BARIS YANG SAYA HILANGKAN KEMARIN (PENYEBAB CRASH)
+          # ========================================================
+          mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+          mkdir -p prebuilts/ndk
+          mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
+          # ========================================================
+          
           export ROOT_DIR=$GITHUB_WORKSPACE/kernel_platform
           export DEBIAN_FRONTEND=noninteractive
           export COPY_NEEDED=0
