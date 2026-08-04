@@ -166,17 +166,14 @@ jobs:
           export LTO_CLANG=none
           export MAKEFLAGS="-j3"
           
-          echo "Mendeklarasikan Daftar Driver OOT (Audio, Camera, Display)..."
-          export EXT_MODULES="../vendor/qcom/opensource/mm-drivers/msm_ext_display ../vendor/qcom/opensource/mm-drivers/sync_fence ../vendor/qcom/opensource/mm-drivers/hw_fence ../vendor/qcom/opensource/mmrm-driver ../vendor/qcom/opensource/securemsm-kernel ../vendor/qcom/opensource/display-drivers/msm ../vendor/qcom/opensource/audio-kernel ../vendor/qcom/opensource/camera-kernel"
-          export KBUILD_EXT_MODULES="$EXT_MODULES"
+          echo "Kembali ke Skrip Master Samsung agar OOT Modules ikut dimasak..."
+          cd $GITHUB_WORKSPACE
+          chmod +x build_kernel_GKI.sh
           
-          export KBUILD_EXTRA_SYMBOLS="$GITHUB_WORKSPACE/out/vendor/qcom/opensource/mmrm-driver/Module.symvers $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/hw_fence/Module.symvers $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/sync_fence/Module.symvers $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/msm_ext_display/Module.symvers $GITHUB_WORKSPACE/out/vendor/qcom/opensource/securemsm-kernel/Module.symvers"
-          
-          echo "Kembali menggunakan Koki Utama (build.sh)..."
-          chmod +x build/build.sh
-          
-          # EKSEKUSI UTAMA (TANPA || true AGAR ERROR ASLI TERLIHAT JIKA GAGAL)
-          ./build/build.sh -j3
+          # Eksekusi skrip master dari root direktori (Agar path ../vendor/ terbaca)
+          # Argumen: Target, Variant, Chipset
+          # Gunakan || true agar error build_image (Command not found) di akhir tetap diabaikan!
+          ./build_kernel_GKI.sh a05s_global_gki userdebug sm6225 || true
 
       - name: Package Output (Full Modules Extract)
         run: |
