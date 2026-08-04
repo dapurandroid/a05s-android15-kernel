@@ -168,6 +168,24 @@ jobs:
           echo "Menjinakkan kompilator agar CPU tidak meledak (Maksimal 3 Thread)..."
           export MAKEFLAGS="-j3"
           
+          echo "Memasukkan Ratusan Driver OOT (Audio, Display, Camera) ke Panci Masakan..."
+          export EXT_MODULES="../vendor/qcom/opensource/mm-drivers/msm_ext_display \
+          ../vendor/qcom/opensource/mm-drivers/sync_fence \
+          ../vendor/qcom/opensource/mm-drivers/hw_fence \
+          ../vendor/qcom/opensource/mmrm-driver \
+          ../vendor/qcom/opensource/securemsm-kernel \
+          ../vendor/qcom/opensource/display-drivers/msm \
+          ../vendor/qcom/opensource/audio-kernel \
+          ../vendor/qcom/opensource/camera-kernel"
+          export KBUILD_EXT_MODULES="$EXT_MODULES"
+          
+          echo "Menghubungkan Simbol Ekstra (Symvers) Driver Qualcomm..."
+          export KBUILD_EXTRA_SYMBOLS="$GITHUB_WORKSPACE/out/vendor/qcom/opensource/mmrm-driver/Module.symvers \
+          $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/hw_fence/Module.symvers \
+          $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/sync_fence/Module.symvers \
+          $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/msm_ext_display/Module.symvers \
+          $GITHUB_WORKSPACE/out/vendor/qcom/opensource/securemsm-kernel/Module.symvers"
+          
           chmod +x build/build.sh
           
           # HANYA KERJAKAN 3 PROSES BERSAMAAN AGAR SERVER TIDAK HANG
@@ -183,6 +201,16 @@ jobs:
           
           echo "Mencari File Driver (.ko) di SELURUH sudut repositori..."
           find $GITHUB_WORKSPACE -name "*.ko" -type f -exec cp {} $GITHUB_WORKSPACE/output/modules/ \; 2>/dev/null || true
+          
+          # ==========================================
+          # EKSEKUSI BLACKLIST: Buang modul berbahaya!
+          # ==========================================
+          echo "Mengeksekusi Blacklist: Membuang modul yang bikin bootloop..."
+          cd $GITHUB_WORKSPACE/output/modules
+          rm -f sec.ko
+          # Jika nanti Anda menemukan modul lain yang bermasalah, tinggal tambahkan di bawah ini:
+          # rm -f nama_modul_lain.ko
+          # ==========================================
           
           cd $GITHUB_WORKSPACE/output
           
