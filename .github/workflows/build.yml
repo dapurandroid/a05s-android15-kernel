@@ -50,11 +50,11 @@ jobs:
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/include/linux/* ./include/linux/ 2>/dev/null || true
           patch -p1 < 50_add_susfs_in_kernel-5.10+.patch || true
 
-      - name: Enable KSU, Disable Knox, & Disable LTO (Fast Build)
+      - name: Inject KSU, SuSFS, & Disable Knox
         run: |
-          cd $GITHUB_WORKSPACE/$KERNEL_DIR
+          cd $GITHUB_WORKSPACE/kernel_platform/common
           
-          echo "1. Membantai Knox & DEFEX di SELURUH file konfigurasi (Anti Auto-Override)..."
+          echo "1. Membantai Knox & DEFEX..."
           find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' {} +
           find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' {} +
           find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SECURITY_PROCA=y/# CONFIG_SECURITY_PROCA is not set/g' {} +
@@ -62,10 +62,8 @@ jobs:
           find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_KNOX_KAP=y/# CONFIG_KNOX_KAP is not set/g' {} +
           find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SAMSUNG_RKP=y/# CONFIG_SAMSUNG_RKP is not set/g' {} +
           
-          echo "2. Menentukan target utama untuk injeksi SuSFS & KSU..."
+          echo "2. Menyuntikkan KSU dan SuSFS..."
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
-          
-          echo "3. Menyuntikkan KSU dan SuSFS ke $DEFCONFIG_FILE..."
           sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG_FILE 2>/dev/null || true
           echo "CONFIG_KSU=y" >> $DEFCONFIG_FILE
@@ -78,103 +76,65 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
           
-          echo "4. Mematikan LTO dan Modversions..."
-          echo "CONFIG_LTO_NONE=y" >> $DEFCONFIG_FILE
-          sed -i 's/CONFIG_LTO=y/# CONFIG_LTO is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_LTO_CLANG_FULL=y/# CONFIG_LTO_CLANG_FULL is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_LTO_CLANG_THIN=y/# CONFIG_LTO_CLANG_THIN is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          echo "CONFIG_MODVERSIONS=n" >> $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_MODVERSIONS=y/# CONFIG_MODVERSIONS is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          
-          echo "5. Mematikan BTF Debugging agar tidak error pahole..."
-          sed -i 's/CONFIG_DEBUG_INFO_BTF=y/# CONFIG_DEBUG_INFO_BTF is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_DEBUG_INFO_BTF_MODULES=y/# CONFIG_DEBUG_INFO_BTF_MODULES is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          # Catatan: Kita membiarkan LTO bawaan pabrik (THIN LTO) tetap hidup agar struktur ABI stabil.
 
-      - name: Compile Kernel
-        continue-on-error: true # Wajib, agar error packaging Samsung di akhir tetap diabaikan
+      - name: Compile Kernel & Harvest Modules (The True Ravindu Way)
+        continue-on-error: true
         run: |
-          echo "1. Membangun Sandbox Sempurna untuk Skrip Samsung..."
-          cd $GITHUB_WORKSPACE/kernel_platform
-          
-          sudo rm -rf /build 2>/dev/null || true
-          mkdir -p build
-          cat << 'EOF' > build/gettop.sh
-          gettop() {
-              echo "${ANDROID_BUILD_TOP:-$PWD}"
-          }
-          EOF
-          chmod +x build/gettop.sh
-          sudo ln -sf $GITHUB_WORKSPACE/kernel_platform/build /build
-          
-          # Sinkronisasi build.config
-          cp msm-kernel/build.config.* common/ 2>/dev/null || true
-          cp common/build.config.* msm-kernel/ 2>/dev/null || true
-          mkdir -p kernel_platform
-          cp -a common kernel_platform/ 2>/dev/null || true
-          cp -a msm-kernel kernel_platform/ 2>/dev/null || true
-          
-          # Alat pancingan Soong & NDK agar Samsung tidak crash
-          TRUE_SANDBOX="build/kernel/build-tools"
-          sudo rm -rf $TRUE_SANDBOX/sysroot 2>/dev/null || true
-          mkdir -p $TRUE_SANDBOX/path/linux-x86
-          sudo ln -sf /usr/bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
-          sudo ln -sf /bin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
-          echo '#!/bin/bash' > $TRUE_SANDBOX/path/linux-x86/soong_zip
-          echo 'exit 0' >> $TRUE_SANDBOX/path/linux-x86/soong_zip
-          chmod +x $TRUE_SANDBOX/path/linux-x86/soong_zip
-          
-          mkdir -p prebuilts/ndk-r23/toolchains/llvm/prebuilt/linux-x86_64/sysroot
-          mkdir -p prebuilts/ndk
-          mkdir -p $GITHUB_WORKSPACE/prebuilts/ndk
-          
-          echo "2. Mematikan LTO langsung dari file Konfigurasi GKI Samsung..."
-          # Kita hantam file inti yang selalu di-load oleh build_kernel_GKI.sh
-          sed -i 's/LTO=full/LTO=none/g' common/build.config.gki.aarch64 2>/dev/null || true
-          sed -i 's/LTO=thin/LTO=none/g' common/build.config.gki.aarch64 2>/dev/null || true
-          export LTO=none
-          export LTO_CLANG=none
-          
-          echo "3. Mengeksekusi Skrip Master Samsung Harian..."
+          echo "1. Mengunduh Asisten Panen (LKM_Tools)..."
           cd $GITHUB_WORKSPACE
+          git clone https://github.com/ravindu644/LKM_Tools.git
+          chmod -R +x LKM_Tools/*.sh
+          
+          echo "2. Menyiapkan Folder Pancingan NDK agar Skrip Samsung tidak mati..."
+          mkdir -p prebuilts/ndk
+          export MAKEFLAGS="-j3" # Kunci anti-OOM saat Thin LTO berjalan
+          
+          echo "3. Mengeksekusi Skrip Master Samsung (Memasak Kernel & Ratusan Driver)..."
           chmod +x build_kernel_GKI.sh
+          # Menggunakan || true agar jika gagal di tahap packaging akhir, proses panen LKM_Tools tetap tereksekusi
+          ./build_kernel_GKI.sh a05s_global_gki userdebug sm6225 || true
           
-          # Eksekusi Skrip. Skrip ini sudah dirancang oleh Ravindu untuk memasak
-          # Image dan seluruh isi folder vendor/qcom.
-          ./build_kernel_GKI.sh a05s_global_gki userdebug sm6225
+          echo "4. MENCARI JALUR FILE PENTING (Staging, System.map, Strip Tool)..."
+          STAGING_DIR=$(find $GITHUB_WORKSPACE/out -type d -name "staging" | head -n 1)
+          SYSTEM_MAP=$(find $GITHUB_WORKSPACE/out -name "System.map" | head -n 1)
+          STRIP_TOOL=$(find $GITHUB_WORKSPACE/kernel_platform/prebuilts -name "llvm-strip" | grep -v "ndk" | head -n 1)
           
-      - name: Package Output (Full Modules Extract)
-        run: |
-          # Buat folder output di root workspace
-          mkdir -p $GITHUB_WORKSPACE/output/modules
+          echo "5. EKSEKUSI LKM_TOOLS: Menerjemahkan modules.dep pabrik..."
+          ./LKM_Tools/01.module_dep.sh prebuilts/vendor_boot/modules.dep prebuilts/vendor_boot
+          ./LKM_Tools/01.module_dep.sh prebuilts/vendor_dlkm/modules.dep prebuilts/vendor_dlkm
           
-          echo "Mencari File Image di SELURUH sudut repositori..."
-          find $GITHUB_WORKSPACE -name "Image" -type f -exec cp {} $GITHUB_WORKSPACE/output/ \; 2>/dev/null || true
+          mkdir -p output/vendor_boot_modules
+          mkdir -p output/vendor_dlkm_modules
           
-          echo "Mencari File Driver (.ko) di SELURUH sudut repositori..."
-          find $GITHUB_WORKSPACE -name "*.ko" -type f -exec cp {} $GITHUB_WORKSPACE/output/modules/ \; 2>/dev/null || true
-          
-          # ==========================================
-          # EKSEKUSI BLACKLIST: Buang modul berbahaya!
-          # ==========================================
-          echo "Mengeksekusi Blacklist: Membuang modul yang bikin bootloop..."
-          cd $GITHUB_WORKSPACE/output/modules
-          rm -f sec.ko
-          # Jika nanti Anda menemukan modul lain yang bermasalah, tinggal tambahkan di bawah ini:
-          # rm -f nama_modul_lain.ko
-          # ==========================================
-          
-          cd $GITHUB_WORKSPACE/output
-          
-          echo "=== DEBUG: Isi folder hasil panen kita ==="
-          ls -lh
-          echo "=== DEBUG: Beberapa file .ko yang berhasil ditangkap ==="
-          ls -lh modules/ | head -n 15
-          
-          zip -r Kernel_A05s_KSU_Modules.zip Image modules/
+          echo "6. EKSEKUSI LKM_TOOLS: Menyedot modul khusus vendor_boot..."
+          ./LKM_Tools/02.prepare_vendor_boot_modules.sh \
+            prebuilts/vendor_boot/modules_list.txt \
+            $STAGING_DIR \
+            prebuilts/vendor_boot/modules.load \
+            $SYSTEM_MAP \
+            $STRIP_TOOL \
+            output/vendor_boot_modules
+            
+          echo "7. EKSEKUSI LKM_TOOLS: Menyedot modul vendor_dlkm (Pruning & Blacklist sec.ko aktif)..."
+          ./LKM_Tools/03.prepare_vendor_dlkm.sh \
+            prebuilts/vendor_dlkm/modules_list.txt \
+            $STAGING_DIR \
+            prebuilts/vendor_dlkm/modules.load \
+            $SYSTEM_MAP \
+            $STRIP_TOOL \
+            output/vendor_dlkm_modules \
+            prebuilts/vendor_boot/modules_list.txt \
+            "" \
+            prebuilts/vendor_dlkm/modules.blacklist
+            
+          echo "8. Mengumpulkan Image & Mengemas Hasil Akhir..."
+          find $GITHUB_WORKSPACE/out -name "Image" -type f -exec cp {} output/ \; 2>/dev/null || true
+          cd output
+          zip -r Kernel_A05s_KSU_SuSFS_Final.zip Image vendor_boot_modules/ vendor_dlkm_modules/
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KernelSU_SuSFS_A05s_Modules
-          path: output/Kernel_A05s_KSU_Modules.zip
+          name: Kernel_A05s_KSU_SuSFS_Final
+          path: output/Kernel_A05s_KSU_SuSFS_Final.zip
