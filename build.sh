@@ -34,6 +34,7 @@ if [ -z "$BUILD_KERNEL_VERSION" ]; then
     export BUILD_KERNEL_VERSION="KSU-SuSFS"
 fi
 
+mkdir -p "${WDIR}/custom_defconfigs"
 echo -e "CONFIG_LOCALVERSION_AUTO=n\nCONFIG_LOCALVERSION=\"-dapurandroid-${BUILD_KERNEL_VERSION}\"\n" > "${WDIR}/custom_defconfigs/version_defconfig"
 
 #1. target config
@@ -51,7 +52,9 @@ export TARGET_PRODUCT=gki
 export TARGET_BOARD_PLATFORM=gki
 
 export ANDROID_PRODUCT_OUT=${ANDROID_BUILD_TOP}/out/target/product/${MODEL}
+mkdir -p ${ANDROID_PRODUCT_OUT}
 export OUT_DIR=${ANDROID_BUILD_TOP}/out/msm-${CHIPSET_NAME}-${CHIPSET_NAME}-${TARGET_PRODUCT}
+mkdir -p ${OUT_DIR}
 
 # for Lcd(techpack) driver build
 export KBUILD_EXTRA_SYMBOLS="${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mmrm-driver/Module.symvers \
