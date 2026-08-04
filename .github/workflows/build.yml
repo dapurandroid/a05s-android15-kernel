@@ -153,8 +153,12 @@ jobs:
           sudo ln -sf /sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /usr/sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           
+          echo "Menjinakkan kompilator agar CPU tidak meledak..."
+          export MAKEFLAGS="-j3"
           chmod +x build/build.sh
-          ./build/build.sh || true
+          
+          # HANYA KERJAKAN 3 PROSES BERSAMAAN AGAR SERVER TIDAK HANG
+          ./build/build.sh -j3 || true
 
       - name: Package Output (Full Modules Extract)
         run: |
