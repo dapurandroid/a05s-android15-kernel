@@ -164,37 +164,19 @@ jobs:
           echo "Mematikan LTO dari akar Environment Variable..."
           export LTO=none
           export LTO_CLANG=none
-          
-          echo "Menjinakkan kompilator agar CPU tidak meledak (Maksimal 3 Thread)..."
           export MAKEFLAGS="-j3"
           
-          echo "Mendeklarasikan Variabel Wajib untuk Mandor Samsung..."
-          export TARGET_BOARD_PLATFORM=gki
-          export MODNAME=audio_dlkm
-          
-          echo "Memasukkan Ratusan Driver OOT (Audio, Display, Camera) ke Panci Masakan..."
-          export EXT_MODULES="../vendor/qcom/opensource/mm-drivers/msm_ext_display \
-          ../vendor/qcom/opensource/mm-drivers/sync_fence \
-          ../vendor/qcom/opensource/mm-drivers/hw_fence \
-          ../vendor/qcom/opensource/mmrm-driver \
-          ../vendor/qcom/opensource/securemsm-kernel \
-          ../vendor/qcom/opensource/display-drivers/msm \
-          ../vendor/qcom/opensource/audio-kernel \
-          ../vendor/qcom/opensource/camera-kernel"
+          echo "Mendeklarasikan Daftar Driver OOT (Audio, Camera, Display)..."
+          export EXT_MODULES="../vendor/qcom/opensource/mm-drivers/msm_ext_display ../vendor/qcom/opensource/mm-drivers/sync_fence ../vendor/qcom/opensource/mm-drivers/hw_fence ../vendor/qcom/opensource/mmrm-driver ../vendor/qcom/opensource/securemsm-kernel ../vendor/qcom/opensource/display-drivers/msm ../vendor/qcom/opensource/audio-kernel ../vendor/qcom/opensource/camera-kernel"
           export KBUILD_EXT_MODULES="$EXT_MODULES"
           
-          echo "Menghubungkan Simbol Ekstra (Symvers) Driver Qualcomm..."
-          export KBUILD_EXTRA_SYMBOLS="$GITHUB_WORKSPACE/out/vendor/qcom/opensource/mmrm-driver/Module.symvers \
-          $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/hw_fence/Module.symvers \
-          $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/sync_fence/Module.symvers \
-          $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/msm_ext_display/Module.symvers \
-          $GITHUB_WORKSPACE/out/vendor/qcom/opensource/securemsm-kernel/Module.symvers"
+          export KBUILD_EXTRA_SYMBOLS="$GITHUB_WORKSPACE/out/vendor/qcom/opensource/mmrm-driver/Module.symvers $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/hw_fence/Module.symvers $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/sync_fence/Module.symvers $GITHUB_WORKSPACE/out/vendor/qcom/opensource/mm-drivers/msm_ext_display/Module.symvers $GITHUB_WORKSPACE/out/vendor/qcom/opensource/securemsm-kernel/Module.symvers"
           
-          echo "Memanggil Mandor Dapur Samsung (prepare_vendor.sh)..."
-          chmod +x build/android/prepare_vendor.sh
+          echo "Kembali menggunakan Koki Utama (build.sh)..."
+          chmod +x build/build.sh
           
-          # EKSEKUSI MANDOR (Dia yang akan mengatur build.sh dan ratusan modul OOT)
-          RECOMPILE_KERNEL=1 ./build/android/prepare_vendor.sh sec gki || true
+          # EKSEKUSI UTAMA (TANPA || true AGAR ERROR ASLI TERLIHAT JIKA GAGAL)
+          ./build/build.sh -j3
 
       - name: Package Output (Full Modules Extract)
         run: |
