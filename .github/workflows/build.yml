@@ -83,6 +83,11 @@ jobs:
           echo "CONFIG_MODVERSIONS=n" >> $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_MODVERSIONS=y/# CONFIG_MODVERSIONS is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
 
+          # [TAMBAHKAN KODE INI UNTUK MEMBUNUH BTF DEBUG]
+          echo "Mematikan BTF Debugging agar tidak error pahole..."
+          sed -i 's/CONFIG_DEBUG_INFO_BTF=y/# CONFIG_DEBUG_INFO_BTF is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+          sed -i 's/CONFIG_DEBUG_INFO_BTF_MODULES=y/# CONFIG_DEBUG_INFO_BTF_MODULES is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
+
       - name: Compile Kernel
         run: |
           cd $GITHUB_WORKSPACE/kernel_platform
