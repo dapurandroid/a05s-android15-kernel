@@ -26,7 +26,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev libelf-dev bc \
           python3 bc cpio tar wget curl git-core zlib1g-dev liblz4-tool libncurses5-dev clang \
-          llvm lld gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu jq rsync python3-pip zip
+          llvm lld gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu jq rsync python3-pip zip dwarves
 
       - name: Inject KernelSU Next & SuSFS
         run: |
@@ -53,15 +53,19 @@ jobs:
       - name: Enable KSU, Disable Knox, & Disable LTO (Fast Build)
         run: |
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
+          
+          echo "1. Membantai Knox & DEFEX di SELURUH file konfigurasi (Anti Auto-Override)..."
+          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' {} +
+          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' {} +
+          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SECURITY_PROCA=y/# CONFIG_SECURITY_PROCA is not set/g' {} +
+          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SAMSUNG_PROCA=y/# CONFIG_SAMSUNG_PROCA is not set/g' {} +
+          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_KNOX_KAP=y/# CONFIG_KNOX_KAP is not set/g' {} +
+          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SAMSUNG_RKP=y/# CONFIG_SAMSUNG_RKP is not set/g' {} +
+          
+          echo "2. Menentukan target utama untuk injeksi SuSFS & KSU..."
           DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
           
-          sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_SECURITY_PROCA=y/# CONFIG_SECURITY_PROCA is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_SAMSUNG_PROCA=y/# CONFIG_SAMSUNG_PROCA is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_KNOX_KAP=y/# CONFIG_KNOX_KAP is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i 's/CONFIG_SAMSUNG_RKP=y/# CONFIG_SAMSUNG_RKP is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          
+          echo "3. Menyuntikkan KSU dan SuSFS ke $DEFCONFIG_FILE..."
           sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG_FILE 2>/dev/null || true
           echo "CONFIG_KSU=y" >> $DEFCONFIG_FILE
@@ -74,17 +78,16 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
           echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
           
+          echo "4. Mematikan LTO dan Modversions..."
           echo "CONFIG_LTO_NONE=y" >> $DEFCONFIG_FILE
           sed -i 's/CONFIG_LTO=y/# CONFIG_LTO is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_LTO_CLANG_FULL=y/# CONFIG_LTO_CLANG_FULL is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_LTO_CLANG_THIN=y/# CONFIG_LTO_CLANG_THIN is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-          
           echo "CONFIG_MODVERSIONS=n" >> $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_MODVERSIONS=y/# CONFIG_MODVERSIONS is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
-
-          # [TAMBAHKAN KODE INI UNTUK MEMBUNUH BTF DEBUG]
-          echo "Mematikan BTF Debugging agar tidak error pahole..."
+          
+          echo "5. Mematikan BTF Debugging agar tidak error pahole..."
           sed -i 's/CONFIG_DEBUG_INFO_BTF=y/# CONFIG_DEBUG_INFO_BTF is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
           sed -i 's/CONFIG_DEBUG_INFO_BTF_MODULES=y/# CONFIG_DEBUG_INFO_BTF_MODULES is not set/g' $DEFCONFIG_FILE 2>/dev/null || true
 
