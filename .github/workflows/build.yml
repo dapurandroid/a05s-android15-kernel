@@ -163,20 +163,26 @@ jobs:
           chmod +x build/build.sh
           
           # HANYA KERJAKAN 3 PROSES BERSAMAAN AGAR SERVER TIDAK HANG
-          ./build/build.sh -j3 || true
+          ./build/build.sh -j3
 
       - name: Package Output (Full Modules Extract)
         run: |
-          mkdir -p output/modules
+          # Buat folder output di root workspace
+          mkdir -p $GITHUB_WORKSPACE/output/modules
           
-          # 1. Cari File Image (Otak Kernel)
-          find $GITHUB_WORKSPACE/out -name "Image" -type f -exec cp {} output/ \; 2>/dev/null || true
+          echo "Mencari File Image di SELURUH sudut repositori..."
+          find $GITHUB_WORKSPACE -name "Image" -type f -exec cp {} $GITHUB_WORKSPACE/output/ \; 2>/dev/null || true
           
-          # 2. Cari Semua Driver (.ko) dan kumpulkan
-          find $GITHUB_WORKSPACE/out -name "*.ko" -type f -exec cp {} output/modules/ \; 2>/dev/null || true
+          echo "Mencari File Driver (.ko) di SELURUH sudut repositori..."
+          find $GITHUB_WORKSPACE -name "*.ko" -type f -exec cp {} $GITHUB_WORKSPACE/output/modules/ \; 2>/dev/null || true
           
-          # 3. Zip semua temuan agar mudah di-download
-          cd output
+          cd $GITHUB_WORKSPACE/output
+          
+          echo "=== DEBUG: Isi folder hasil panen kita ==="
+          ls -lh
+          echo "=== DEBUG: Beberapa file .ko yang berhasil ditangkap ==="
+          ls -lh modules/ | head -n 15
+          
           zip -r Kernel_A05s_KSU_Modules.zip Image modules/
 
       - name: Upload Build Artifact
