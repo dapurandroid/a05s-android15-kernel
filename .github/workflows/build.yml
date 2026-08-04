@@ -153,8 +153,13 @@ jobs:
           sudo ln -sf /sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           sudo ln -sf /usr/sbin/* $TRUE_SANDBOX/path/linux-x86/ 2>/dev/null || true
           
-          echo "Menjinakkan kompilator agar CPU tidak meledak..."
+          echo "Mematikan LTO dari akar Environment Variable..."
+          export LTO=none
+          export LTO_CLANG=none
+          
+          echo "Menjinakkan kompilator agar CPU tidak meledak (Maksimal 3 Thread)..."
           export MAKEFLAGS="-j3"
+          
           chmod +x build/build.sh
           
           # HANYA KERJAKAN 3 PROSES BERSAMAAN AGAR SERVER TIDAK HANG
