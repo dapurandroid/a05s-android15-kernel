@@ -100,7 +100,13 @@ export MAKEFLAGS="-j3"
 
 #3. build kernel
 build_kernel(){
-    env ${BUILD_OPTIONS[@]} "${GKI_BUILDSCRIPT}" sec ${TARGET_PRODUCT} || exit 1
+    echo -e "[+] Mengeksekusi Koki Master Samsung (OOT Driver diaktifkan)...\n"
+    
+    # Paksa Thin LTO ke dalam konfigurasi dasar agar tidak OOM
+    sed -i 's/LTO=full/LTO=thin/g' kernel_platform/common/build.config.gki.aarch64 2>/dev/null || true
+    
+    chmod +x build_kernel_GKI.sh
+    ./build_kernel_GKI.sh a05s_global_gki userdebug sm6225 || exit 1
 }
 
 #4. copy kernel image to dist directory
