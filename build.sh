@@ -65,14 +65,9 @@ mkdir -p ${OUT_DIR}
 
 #3. build kernel menggunakan MASTER SAMSUNG
 build_kernel(){
-    echo -e "[+] Mengeksekusi Koki Master Samsung (LTO Dimatikan Sepenuhnya)...\n"
+    echo -e "[+] Mengeksekusi Koki Master Samsung...\n"
     
-    # Bantai LTO dari akar konfigurasi Samsung agar RAM server GitHub tidak meledak
-    echo "[+] Mematikan LTO di konfigurasi..."
-    find kernel_platform/ -name "*.config*" -type f -exec sed -i 's/LTO=full/LTO=none/g' {} +
-    find kernel_platform/ -name "*.config*" -type f -exec sed -i 's/LTO=thin/LTO=none/g' {} +
-    
-    # Karena RAM aman (LTO mati), kita bebaskan CPU lari maksimal!
+    # Biarkan LTO default (Full) bekerja, mesin Vultr kita kuat
     export MAKEFLAGS="-j$(nproc)"
     
     chmod +x build_kernel_GKI.sh
