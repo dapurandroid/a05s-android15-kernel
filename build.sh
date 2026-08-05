@@ -71,7 +71,7 @@ build_kernel(){
     export MAKEFLAGS="-j$(nproc)"
     
     chmod +x build_kernel_GKI.sh
-    ./build_kernel_GKI.sh a05s_global_gki userdebug sm6225 || exit 1
+    UPDATE_KMI_SYMBOL_LIST=1 SKIP_DEFCONFIG_CHECK=1 IGNORE_DEFCONFIG_ERRORS=1 LTO=thin ./build_kernel_GKI.sh a05s_global_gki userdebug sm6225 || exit 1
 }
 
 #4. copy kernel image to dist directory
