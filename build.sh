@@ -65,12 +65,16 @@ mkdir -p ${OUT_DIR}
 
 #3. build kernel menggunakan MASTER SAMSUNG
 build_kernel(){
-    echo -e "[+] Mengeksekusi Koki Master Samsung (OOT Driver diaktifkan)...\n"
+    echo -e "[+] Mengeksekusi Koki Master Samsung (LTO Dimatikan Sepenuhnya)...\n"
     
-    # Paksa Thin LTO agar kompilasi aman dari OOM
-    sed -i 's/LTO=full/LTO=thin/g' kernel_platform/common/build.config.gki.aarch64 2>/dev/null || true
+    # Bantai LTO dari akar konfigurasi Samsung agar RAM server GitHub tidak meledak
+    echo "[+] Mematikan LTO di konfigurasi..."
+    find kernel_platform/ -name "*.config*" -type f -exec sed -i 's/LTO=full/LTO=none/g' {} +
+    find kernel_platform/ -name "*.config*" -type f -exec sed -i 's/LTO=thin/LTO=none/g' {} +
     
-    export MAKEFLAGS="-j3"
+    # Karena RAM aman (LTO mati), kita bebaskan CPU lari maksimal!
+    export MAKEFLAGS="-j$(nproc)"
+    
     chmod +x build_kernel_GKI.sh
     ./build_kernel_GKI.sh a05s_global_gki userdebug sm6225 || exit 1
 }
