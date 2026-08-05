@@ -16,18 +16,25 @@ clean_up(){
         && mkdir -p "${WDIR}/dist"
 }
 
-# Download and install Toolchain
+# Download and install Toolchain (DIBUNGKAM AGAR SERVER TIDAK CRASH)
 if [ ! -d "${WDIR}/kernel_platform/prebuilts" ]; then
-    echo -e "[+] Downloading and installing Toolchain...\n"
-    sudo apt install rsync p7zip-full -y
+    echo -e "[+] Downloading Toolchain (Silent Mode)...\n"
+    sudo apt install rsync p7zip-full -y > /dev/null 2>&1
     curl -LO --progress-bar https://github.com/ravindu644/android_kernel_sm_x810/releases/download/toolchain/qcom-5.15-toolchain.tar.gz.zip
     curl -LO --progress-bar https://github.com/ravindu644/android_kernel_sm_x810/releases/download/toolchain/qcom-5.15-toolchain.tar.gz.z01
-    7z x qcom-5.15-toolchain.tar.gz.zip && rm qcom-5.15-toolchain.tar.gz.zip qcom-5.15-toolchain.tar.gz.z01
-    tar -xvf qcom-5.15-toolchain.tar.gz && rm qcom-5.15-toolchain.tar.gz
+    
+    echo "[+] Mengekstrak arsip 7z..."
+    7z x qcom-5.15-toolchain.tar.gz.zip > /dev/null 2>&1
+    rm qcom-5.15-toolchain.tar.gz.zip qcom-5.15-toolchain.tar.gz.z01
+    
+    echo "[+] Mengekstrak arsip tar (Tunggu sebentar, sedang berjalan tanpa log)..."
+    tar -xf qcom-5.15-toolchain.tar.gz
+    rm qcom-5.15-toolchain.tar.gz
+    
     mv prebuilts "${WDIR}/kernel_platform" && chmod -R +x "${WDIR}/kernel_platform/prebuilts"    
 fi
 
-echo -e "[+] Toolchain installed...\n"
+echo -e "[+] Toolchain terpasang dengan aman...\n"
 
 # setup localversion
 if [ -z "$BUILD_KERNEL_VERSION" ]; then
@@ -56,55 +63,14 @@ mkdir -p ${ANDROID_PRODUCT_OUT}
 export OUT_DIR=${ANDROID_BUILD_TOP}/out/msm-${CHIPSET_NAME}-${CHIPSET_NAME}-${TARGET_PRODUCT}
 mkdir -p ${OUT_DIR}
 
-# for Lcd(techpack) driver build
-export KBUILD_EXTRA_SYMBOLS="${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mmrm-driver/Module.symvers \
-		${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mm-drivers/hw_fence/Module.symvers \
-		${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mm-drivers/sync_fence/Module.symvers \
-		${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/mm-drivers/msm_ext_display/Module.symvers \
-		${ANDROID_BUILD_TOP}/out/vendor/qcom/opensource/securemsm-kernel/Module.symvers \
-"
-
-# for Audio(techpack) driver build
-export MODNAME=audio_dlkm
-
-export EXT_MODULES="../vendor/qcom/opensource/mm-drivers/msm_ext_display \
-  ../vendor/qcom/opensource/mm-drivers/sync_fence \
-  ../vendor/qcom/opensource/mm-drivers/hw_fence \
-  ../vendor/qcom/opensource/mmrm-driver \
-  ../vendor/qcom/opensource/securemsm-kernel \
-  ../vendor/qcom/opensource/display-drivers/msm \
-  ../vendor/qcom/opensource/audio-kernel \
-  ../vendor/qcom/opensource/camera-kernel \
-  ../vendor/qcom/opensource/touch-drivers \
-"
-
-export MAKE_MENUCONFIG=0
-HERMETIC_VALUE=1
-if [ "$MAKE_MENUCONFIG" = "1" ]; then
-    HERMETIC_VALUE=0
-fi
-
-# custom build options
-export GKI_BUILDSCRIPT="./kernel_platform/build/android/prepare_vendor.sh"
-export BUILD_OPTIONS=(
-    RECOMPILE_KERNEL=1
-    SKIP_MRPROPER=0
-    HERMETIC_TOOLCHAIN=$HERMETIC_VALUE
-    KMI_SYMBOL_LIST_STRICT_MODE=0
-    ABI_DEFINITION=""
-    LTO="thin"
-)
-
-# Kunci Anti-OOM RAM
-export MAKEFLAGS="-j3"
-
-#3. build kernel
+#3. build kernel menggunakan MASTER SAMSUNG
 build_kernel(){
     echo -e "[+] Mengeksekusi Koki Master Samsung (OOT Driver diaktifkan)...\n"
     
-    # Paksa Thin LTO ke dalam konfigurasi dasar agar tidak OOM
+    # Paksa Thin LTO agar kompilasi aman dari OOM
     sed -i 's/LTO=full/LTO=thin/g' kernel_platform/common/build.config.gki.aarch64 2>/dev/null || true
     
+    export MAKEFLAGS="-j3"
     chmod +x build_kernel_GKI.sh
     ./build_kernel_GKI.sh a05s_global_gki userdebug sm6225 || exit 1
 }
@@ -159,7 +125,7 @@ package_vendor_dlkm_modules(){
 
 zip_dist_files(){
     echo -e "[+] Zipping dist files...\n"
-    cd "${WDIR}/dist" && zip -r -9 "${WDIR}/dist/Kernel_A05s_KSU_SuSFS_Full.zip" Image built_vendor_boot_modules built_vendor_dlkm_modules && cd "${WDIR}"
+    cd "${WDIR}/dist" && zip -r -9 "${WDIR}/Kernel_A05s_KSU_SuSFS_Full.zip" Image built_vendor_boot_modules built_vendor_dlkm_modules && cd "${WDIR}"
 }
 
 clean_up
