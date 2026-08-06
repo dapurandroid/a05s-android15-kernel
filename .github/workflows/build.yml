@@ -138,8 +138,8 @@ jobs:
           # Melibas satpam ABI cadangan agar tidak ikut campur
           find kernel_platform/build/ -type f -name "*.sh" -exec sed -i 's/sanity_check_abi/true/g' {} +
 
-          echo "4. Menidurkan Kode Zombie KPROBES di Driver USB..."
-          sed -i '1s/^/#undef CONFIG_KPROBES\n/' ./kernel_platform/msm-kernel/drivers/usb/gadget/function/f_fs_ipc_log.c
+          echo "4. Membakar Kode Zombie KPROBES di Driver USB..."
+          sed -i 's/#ifdef CONFIG_KPROBES/#if 0/g' ./kernel_platform/msm-kernel/drivers/usb/gadget/function/f_fs_ipc_log.c
           
       - name: Execute Custom build.sh
         run: |
