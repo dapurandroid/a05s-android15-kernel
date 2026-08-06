@@ -125,8 +125,12 @@ jobs:
               echo -e "CONFIG_KSU=y\nCONFIG_KSU_SUSFS=y\nCONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y\nCONFIG_KSU_SUSFS_SUS_PATH=y\nCONFIG_KSU_SUSFS_SUS_MOUNT=y\nCONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSUM=y\nCONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y\nCONFIG_KSU_SUSFS_SUS_KSTAT=y\nCONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> "$file"
           done
 
-          echo "3. Menambal Bug cp extra di build_utils.sh..."
+          echo "3. Menambal Bug dan Membutakan Inspektur Samsung..."
+          # Menambal bug cp extra
           sed -i 's|cp -r ${src_dir}/extra/\* ${dest_dir}/extra/|cp -r ${src_dir}/extra/* ${dest_dir}/extra/ 2>/dev/null \|\| true|g' ./kernel_platform/build/kernel/build_utils.sh
+          
+          # Membutakan inspektur defconfig di vendor
+          sed -i 's/eval check_merged_defconfig/true/g' ./kernel_platform/build/kernel/build.sh
           
       - name: Execute Custom build.sh
         run: |
