@@ -36,12 +36,15 @@ jobs:
           cd $GITHUB_WORKSPACE
           KERNEL_DIR="kernel_platform/common"
           
+          # 1. Tarik KernelSU-Next
           cd $GITHUB_WORKSPACE/$KERNEL_DIR
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
           
+          # 2. Tarik SuSFS (WAJIB CABANG GKI 5.15)
           cd $GITHUB_WORKSPACE
-          git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git susfs
+          git clone --depth=1 -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git susfs
           
+          # 3. Patching Bawaan
           cp susfs/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch $KERNEL_DIR/KernelSU-Next/
           cd $KERNEL_DIR/KernelSU-Next
           patch -p1 < 10_enable_susfs_for_ksu.patch || true
@@ -52,39 +55,88 @@ jobs:
           cp -r $GITHUB_WORKSPACE/susfs/kernel_patches/include/linux/* ./include/linux/ 2>/dev/null || true
           patch -p1 < 50_add_susfs_in_kernel-5.10+.patch || true
 
+          # 4. OPERASI BEDAH MANUAL (Otomatisasi Asisten Dapur)
+          echo "Menjahit namespace.c..."
+          sed -i '/#include <linux\/nsproxy.h>/a #include <linux\/susfs_def.h>' $GITHUB_WORKSPACE/$KERNEL_DIR/fs/namespace.c
+          
+          echo "Menjahit init.c dan membuang ksu_late_loaded..."
+          sed -i '/ksu_late_loaded/d' $GITHUB_WORKSPACE/$KERNEL_DIR/KernelSU-Next/kernel/core/init.c
+          sed -i '/#include "selinux\/selinux.h"/a #include "hook/setuid_hook.h"\n#include "feature/sucompat.h"' $GITHUB_WORKSPACE/$KERNEL_DIR/KernelSU-Next/kernel/core/init.c
+          
+          echo "Membuat Menu Kconfig SuSFS..."
+          cat << 'EOF' >> $GITHUB_WORKSPACE/$KERNEL_DIR/KernelSU-Next/kernel/Kconfig
+          menu "KernelSU - SUSFS"
+          config KSU_SUSFS
+                 bool "KernelSU addon - SUSFS"
+                 depends on KSU
+                 default y
+          config KSU_SUSFS_HAS_MAGIC_MOUNT
+                 bool "Enable Magic Mount"
+                 depends on KSU_SUSFS
+                 default y
+          config KSU_SUSFS_SUS_PATH
+                 bool "Enable Hide Path"
+                 depends on KSU_SUSFS
+                 default y
+          config KSU_SUSFS_SUS_MOUNT
+                 bool "Enable Hide Mount"
+                 depends on KSU_SUSFS
+                 default y
+          config KSU_SUSFS_AUTO_ADD_SUS_KSUM
+                 bool "Enable Auto Add Sus KSU Mount"
+                 depends on KSU_SUSFS
+                 default y
+          config KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT
+                 bool "Enable Auto Add Sus Bind Mount"
+                 depends on KSU_SUSFS
+                 default y
+          config KSU_SUSFS_SUS_KSTAT
+                 bool "Enable Spoof KSTAT"
+                 depends on KSU_SUSFS
+                 default y
+          config KSU_SUSFS_SUS_OVERLAYFS
+                 bool "Enable Hide Overlayfs"
+                 depends on KSU_SUSFS
+                 default y
+          endmenu
+          EOF
+
       - name: Inject KSU, SuSFS, & Disable Knox
         run: |
-          cd $GITHUB_WORKSPACE/kernel_platform/common
+          cd $GITHUB_WORKSPACE
           
-          echo "1. Membantai Knox & DEFEX..."
-          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' {} +
-          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' {} +
-          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SECURITY_PROCA=y/# CONFIG_SECURITY_PROCA is not set/g' {} +
-          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SAMSUNG_PROCA=y/# CONFIG_SAMSUNG_PROCA is not set/g' {} +
-          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_KNOX_KAP=y/# CONFIG_KNOX_KAP is not set/g' {} +
-          find arch/arm64/configs/ -type f -exec sed -i 's/CONFIG_SAMSUNG_RKP=y/# CONFIG_SAMSUNG_RKP is not set/g' {} +
+          echo "1. Membantai Knox & DEFEX (Di KEDUA Dapur)..."
+          find ./kernel_platform/common/arch/arm64/configs ./kernel_platform/msm-kernel/arch/arm64/configs -type f | while read file; do
+              sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/g' "$file"
+              sed -i 's/CONFIG_SAMSUNG_DEFEX=y/# CONFIG_SAMSUNG_DEFEX is not set/g' "$file"
+              sed -i 's/CONFIG_SECURITY_PROCA=y/# CONFIG_SECURITY_PROCA is not set/g' "$file"
+              sed -i 's/CONFIG_SAMSUNG_PROCA=y/# CONFIG_SAMSUNG_PROCA is not set/g' "$file"
+              sed -i 's/CONFIG_KNOX_KAP=y/# CONFIG_KNOX_KAP is not set/g' "$file"
+              sed -i 's/CONFIG_SAMSUNG_RKP=y/# CONFIG_SAMSUNG_RKP is not set/g' "$file"
+              sed -i 's/CONFIG_FIVE=y/# CONFIG_FIVE is not set/g' "$file"
+              sed -i 's/CONFIG_SECURITY_DSMS=y/# CONFIG_SECURITY_DSMS is not set/g' "$file"
+          done
           
-          echo "2. Menyuntikkan KSU dan SuSFS..."
-          DEFCONFIG_FILE=$(find arch/arm64/configs/ -name "*a057f*" -o -name "*gki*" -o -name "*defconfig*" | head -n 1)
-          sed -i '/CONFIG_KSU/d' $DEFCONFIG_FILE 2>/dev/null || true
-          sed -i '/CONFIG_KSU_SUSFS/d' $DEFCONFIG_FILE 2>/dev/null || true
-          echo "CONFIG_KSU=y" >> $DEFCONFIG_FILE
-          echo "CONFIG_KSU_SUSFS=y" >> $DEFCONFIG_FILE
-          echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> $DEFCONFIG_FILE
-          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> $DEFCONFIG_FILE
-          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> $DEFCONFIG_FILE
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSUM=y" >> $DEFCONFIG_FILE
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> $DEFCONFIG_FILE
-          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> $DEFCONFIG_FILE
-          echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> $DEFCONFIG_FILE
+          echo "2. Menyuntikkan KSU dan SuSFS (HANYA di Dapur Inti/Common)..."
+          find ./kernel_platform/common/arch/arm64/configs -type f \( -name "*defconfig*" -o -name "*gki*" -o -name "*a057f*" \) | while read file; do
+              sed -i '/CONFIG_KPROBES/d' "$file"
+              sed -i '/CONFIG_KSU/d' "$file"
+              echo -e "\nCONFIG_KPROBES=y\nCONFIG_OVERLAY_FS=y\nCONFIG_KALLSYMS=y\nCONFIG_KALLSYMS_ALL=y" >> "$file"
+              echo -e "CONFIG_KSU=y\nCONFIG_KSU_SUSFS=y\nCONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y\nCONFIG_KSU_SUSFS_SUS_PATH=y\nCONFIG_KSU_SUSFS_SUS_MOUNT=y\nCONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSUM=y\nCONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y\nCONFIG_KSU_SUSFS_SUS_KSTAT=y\nCONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> "$file"
+          done
 
           echo "3. Menambal Bug cp extra di build_utils.sh..."
-          sed -i 's|cp -r ${src_dir}/extra/\* ${dest_dir}/extra/|cp -r ${src_dir}/extra/* ${dest_dir}/extra/ 2>/dev/null \|\| true|g' $GITHUB_WORKSPACE/kernel_platform/build/kernel/build_utils.sh
+          sed -i 's|cp -r ${src_dir}/extra/\* ${dest_dir}/extra/|cp -r ${src_dir}/extra/* ${dest_dir}/extra/ 2>/dev/null \|\| true|g' ./kernel_platform/build/kernel/build_utils.sh
           
       - name: Execute Custom build.sh
         run: |
           cd $GITHUB_WORKSPACE
           chmod +x build.sh
+          # Bypass ABI Samsung dan paksa LTO=thin dimasukkan langsung ke eksekusi
+          export UPDATE_KMI_SYMBOL_LIST=1
+          export SKIP_DEFCONFIG_CHECK=1
+          export IGNORE_DEFCONFIG_ERRORS=1
+          export LTO=thin
           ./build.sh
 
       - name: Upload Build Artifact
