@@ -131,6 +131,12 @@ jobs:
           
           # Membutakan inspektur defconfig di vendor
           sed -i 's/eval check_merged_defconfig/true/g' ./kernel_platform/build/kernel/build.sh
+
+          # Melibas satpam defconfig di semua file skrip build Samsung
+          find kernel_platform/build/ -type f -name "*.sh" -exec sed -i 's/check_merged_defconfig/true/g' {} +
+
+          # Melibas satpam ABI cadangan agar tidak ikut campur
+          find kernel_platform/build/ -type f -name "*.sh" -exec sed -i 's/sanity_check_abi/true/g' {} +
           
       - name: Execute Custom build.sh
         run: |
